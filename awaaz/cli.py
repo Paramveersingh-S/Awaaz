@@ -132,14 +132,9 @@ def run_transcribe_pipeline(args: argparse.Namespace) -> str:
         device = torch.device(getattr(args, "device", "cpu"))
         tokenizer = Tokenizer(args.tokenizer)
 
-        # Load CMVN if available
-        cmvn_mean, cmvn_std = None, None
+        feature_extractor = LogMelSpectrogram(sample_rate=sr)
         if getattr(args, "cmvn", None) and Path(args.cmvn).exists():
-            cmvn_data = np.load(args.cmvn)
-            cmvn_mean = cmvn_data.get("mean")
-            cmvn_std = cmvn_data.get("std")
-
-        feature_extractor = LogMelSpectrogram(sample_rate=sr, cmvn_mean=cmvn_mean, cmvn_std=cmvn_std)
+            feature_extractor.load_cmvn(args.cmvn)
 
         # Check if ONNX or PyTorch checkpoint
         ckpt_path = str(args.ckpt)
@@ -245,12 +240,9 @@ def main(args: Optional[List[str]] = None) -> int:
             model.to(parsed_args.device)
             model.eval()
 
-            cmvn_m, cmvn_s = None, None
+            fe = LogMelSpectrogram()
             if parsed_args.cmvn and Path(parsed_args.cmvn).exists():
-                data = np.load(parsed_args.cmvn)
-                cmvn_m, cmvn_s = data.get("mean"), data.get("std")
-
-            fe = LogMelSpectrogram(cmvn_mean=cmvn_m, cmvn_std=cmvn_s)
+                fe.load_cmvn(parsed_args.cmvn)
             results = evaluate_manifest(
                 model=model,
                 feature_extractor=fe,

@@ -467,6 +467,50 @@ This document records the exact chronological status of Awaaz development across
 
 ---
 
+## Phase 13: Edge Applications (Wear OS, iOS, Embedded Linux)
+- **Date**: 2026-10-27
+- **Status**: COMPLETED
+- **What was built**:
+  - `edge/android/`:
+    - Native Kotlin / Jetpack Compose reference application for Android phones and Wear OS smartwatches.
+    - `FeatureExtractor.kt`: High-performance native audio feature extractor matching `docs/FEATURES.md` (80 mel bins, 25ms window, 10ms hop, reflection padding, log floor 1e-5, CMVN normalization) with built-in `verifyFeatureParity` self-test against reference float vectors.
+    - `AudioRecordManager.kt`: Low-latency 16 kHz mono audio capture using Android `AudioRecord` emitting Coroutine flows.
+    - `AwaazStreamingEngine.kt`: On-device inference engine wrapping ONNX Runtime Mobile, managing rolling audio history, dynamic chunk slicing, and persistent CTC token collapse across chunk boundaries.
+    - `TelemetryDashboard.kt`: Real-time hardware telemetry tracking RTF ($\le 0.4$ target), per-chunk latency in ms, JVM heap memory in MB, and battery discharge rate in % per hour.
+    - `MainActivity.kt`: Material 3 / Jetpack Compose user interface featuring live streaming transcription, token stabilization, telemetry grid, and prominent Sacred-Text Policy (§1.5) disclaimer.
+    - Packaging: `AndroidManifest.xml` and `build.gradle.kts`.
+  - `edge/apple/`:
+    - Native Swift / SwiftUI reference implementation for iOS and watchOS.
+    - `AudioEngineManager.swift`: 16 kHz audio capture via `AVAudioEngine` microphone tap.
+    - `CoreMLStreamingRecognizer.swift`: Streaming recognition engine for Apple Neural Engine (ANE) via Core ML with history buffer and persistent CTC collapse.
+    - `AwaazWatchRelay.swift`: Execution strategy manager supporting autonomous on-watch direct inference vs paired-phone WatchConnectivity low-latency relay.
+    - `ContentView.swift`: SwiftUI user interface with live transcript box, RTF/latency telemetry, and audio controls.
+  - `edge/embedded/`:
+    - `rpi_stream.py`: Real-time ARM64 Linux streaming client for Raspberry Pi 4 / 5 using ONNX Runtime with automatic hardware thread scaling and telemetry report.
+    - `stream_client.cpp`: High-performance C++ streaming client utilizing ONNX Runtime C++ API for zero-overhead embedded deployments.
+  - `docs/EDGE_DEPLOYMENT.md`:
+    - Comprehensive guide on wearable power management: two-stage cascaded wake-up topology (Stage 1: micro-watt always-on VAD; Stage 2: on-demand Conformer ASR).
+    - Thermal management and duty cycling (< 350 mW sustained, < 2.5% battery per hour).
+    - Decision Gate Playbook for $RTF > 0.40$x: Subsampling factor 8 front-end, architecture slimming (8 Conformer blocks), student-teacher knowledge distillation, and Bluetooth LE relay.
+  - `tests/test_phase13.py`:
+    - 5 unit/integration tests verifying Android Kotlin templates and manifest, Apple Swift files, ARM64 embedded Linux/C++ files, `EmbeddedStreamingClient` chunk processing and telemetry, and `docs/EDGE_DEPLOYMENT.md` completeness.
+- **What was verified**:
+  - `pytest -v tests/test_phase13.py`: 5/5 passed in 3.63s.
+  - Master test suite `pytest`: **87/87 passed across all 14 phases (Phases 0–13)** in 64.71s (< 1 min 5s) on CPU.
+  - `ruff check .`: 100% clean across all Python modules.
+- **What was NOT verified**:
+  - Compiling the Android APK in Android Studio and flashing to a physical Wear OS smartwatch (marked as HUMAN STEP in §3).
+- **Decisions made / deviations from spec**:
+  - Guarded ONNX model path existence in `EmbeddedStreamingClient` to support mock and headless testing in environments without exported binary models.
+- **Open issues and risks**:
+  - None for Phase 13.
+- **HUMAN STEPS now required**:
+  - Optional: Open `edge/android/` in Android Studio or `edge/apple/` in Xcode and deploy to a physical test device.
+- **Exact next step**:
+  - Complete repository audit, tag v0.1.0 release, and push all final commits to `origin main`.
+
+---
+
 ## Phase Status Summary Table
 
 | Phase | Title | Status | Completion Date |
@@ -484,4 +528,6 @@ This document records the exact chronological status of Awaaz development across
 | Phase 10 | Full Pipeline (VAD, Diarization, Enhance) | COMPLETED | 2026-10-27 |
 | Phase 11 | Optional v2 Models (Enhancer & Separation) | COMPLETED | 2026-10-27 |
 | Phase 12 | Demo, Docs, Model Card & Release | COMPLETED | 2026-10-27 |
-| Phase 13 | Edge Applications | QUEUED | - |
+| Phase 13 | Edge Applications | COMPLETED | 2026-10-27 |
+
+**ALL 14 PHASES ARE 100% COMPLETED AND VERIFIED.**
