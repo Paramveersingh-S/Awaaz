@@ -283,6 +283,43 @@ This document records the exact chronological status of Awaaz development across
 
 ---
 
+## Phase 8: Streaming Inference
+- **Date**: 2026-10-27
+- **Status**: COMPLETED
+- **What was built**:
+  - `awaaz/stream.py`:
+    - `StreamingRecognizer` implementation for live streaming audio:
+      - Consumes arbitrary block-size 16 kHz mono float32 audio via `accept(block)`.
+      - Maintains integer whole-chunk history window ($L \cdot N_{\text{chunk}}$ frames) preserving convolutional front-end alignment.
+      - Slices strictly the newest $N_{\text{chunk}}$ frames from the dynamic-chunk Conformer output.
+      - State-preserving incremental CTC collapse: carries `last_token_id` across chunk boundaries to collapse sustained phonemes seamlessly.
+      - `flush()` zero-pads residual unaligned audio to final full chunk and completes transcription.
+      - `reset()` completely re-initializes audio buffers, tokens, and emitter state.
+      - `get_partial_stability()` partitions emitted tokens into confirmed (finalized) vs current tentative words.
+  - `docs/STREAMING.md`:
+    - Mathematical formulation of algorithmic latency ($\text{Latency} = \text{Chunk Duration} + \text{Lookahead} = 640\text{ ms}$ for chunk 16; $320\text{ ms}$ for chunk 8).
+    - Detailed v1 rolling-window specifications with integer chunk slicing and boundary collapse.
+    - Architectural design and specifications for v2 constant-time $O(1)$ cached streaming: per-layer Key/Value attention cache ($(B, H, L \cdot N_{\text{chunk}}, d_k)$), RoPE relative position offsets, causal convolution FIFO buffers ($14\text{ frames}$ left padding), and stateful ONNX input/output contract.
+  - `tests/test_phase8.py`:
+    - 5 unit/integration tests verifying block-size independence (100ms vs 320ms vs 1000ms yielding identical transcripts), state integrity after `reset()`, algorithmic latency formula, partial result stability, and `docs/STREAMING.md` deliverable.
+- **What was verified**:
+  - `pytest -v tests/test_phase8.py`: 5/5 passed in 4.06s.
+  - Full suite `pytest -v tests/`: 55/55 passed in 14.85s.
+  - `ruff check .`: 100% clean across all modules.
+- **What was NOT verified**:
+  - Live microphone streaming with sounddevice/PyAudio (Phase 10/12/13).
+- **Decisions made / deviations from spec**:
+  - Capped maximum history window at $(L+1) \times \text{samples\_per\_chunk}$ with exact chunk multiple trimming to ensure stable memory utilization during indefinitely long streams.
+- **Open issues and risks**:
+  - None for Phase 8.
+- **HUMAN STEPS now required**:
+  - None for Phase 8.
+- **Exact next step**:
+  - Commit Phase 8 and push to `origin main`.
+  - Proceed to Phase 9 (Export, Quantization & Edge Budget).
+
+---
+
 ## Phase Status Summary Table
 
 | Phase | Title | Status | Completion Date |
@@ -295,7 +332,7 @@ This document records the exact chronological status of Awaaz development across
 | Phase 5 | Training Loop | COMPLETED | 2026-10-27 |
 | Phase 6 | Colab Runner & Persistence | COMPLETED | 2026-10-27 |
 | Phase 7 | Evaluation & Decoding | COMPLETED | 2026-10-27 |
-| Phase 8 | Streaming Inference | QUEUED | - |
+| Phase 8 | Streaming Inference | COMPLETED | 2026-10-27 |
 | Phase 9 | Export, Quantization & Edge Budget | QUEUED | - |
 | Phase 10 | Full Pipeline (VAD, Diarization, Enhance) | QUEUED | - |
 | Phase 11 | Optional v2 Models (Enhancer & Separation) | QUEUED | - |
