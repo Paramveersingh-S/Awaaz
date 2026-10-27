@@ -320,6 +320,41 @@ This document records the exact chronological status of Awaaz development across
 
 ---
 
+## Phase 9: Export, Quantization, and Edge Budget
+- **Date**: 2026-10-27
+- **Status**: COMPLETED
+- **What was built**:
+  - `awaaz/export.py`:
+    - `export_to_onnx`: Exports PyTorch Conformer-CTC models to ONNX opset 18 with dynamic batch and time dimensions across both `offline` (full context) and `streaming` (baked chunk and left-chunk context) configurations.
+    - `verify_parity`: Numerical parity checker evaluating maximum absolute discrepancy between PyTorch and ONNX Runtime execution across multiple sequence lengths (enforcing $\Delta_{\max} < 10^{-3}$).
+    - `quantize_int8`: Dynamic int8 quantization via ONNX Runtime (`QuantType.QInt8`) compressing linear and convolution weights.
+    - `generate_budget_report`: Automatic estimation of non-embedding parameters, FLOPs/sec at 25 fps, and file footprints across FP32 and int8 models.
+    - `export_feature_parity_test_kit`: Generates reference audio WAV files and binary `.npy` Float32 expected log-mel features for mobile developers building native C++/Kotlin/Swift audio front-ends.
+    - CLI interface (`python -m awaaz.export`).
+  - `docs/EDGE.md`:
+    - Target hardware budget matrix defining RAM budgets, int8 storage limits, and target Real-Time Factors (RTF) across Wear OS smartwatches, low-end Android smartphones, iPhones/Apple Watches, and Raspberry Pi SBCs. Explicitly documents microcontroller infeasibility for open-vocabulary ASR.
+    - Comprehensive model footprint and computational complexity table comparing `tiny` (6.05M params, ~6.1 MB int8), `small` (18.66M params, ~18.7 MB int8), and `base` (55.19M params, ~55.2 MB int8).
+    - Alternative runtime analysis comparing Awaaz ONNX Runtime deployment to k2/icefall Zipformer + sherpa-onnx.
+  - `tests/test_phase9.py`:
+    - 6 unit/integration tests verifying opset 18 export for offline and streaming variants, numerical parity $(< 10^{-3})$, int8 dynamic quantization and executable ONNX Runtime session inference, budget report computation, feature test kit generation, and `docs/EDGE.md` documentation deliverable.
+- **What was verified**:
+  - `pytest -v tests/test_phase9.py`: 6/6 passed in 44.64s.
+  - Full suite `pytest -v tests/`: 61/61 passed in 50.95s.
+  - `ruff check .`: 100% clean across all modules.
+- **What was NOT verified**:
+  - On-device profiling on physical Wear OS watches (designated as Phase 13 HUMAN STEP).
+- **Decisions made / deviations from spec**:
+  - Configured default opset to 18 to align with the modern PyTorch 2.x dynamo ONNX exporter and eliminate version converter warnings while maintaining full ONNX Runtime backward compatibility.
+- **Open issues and risks**:
+  - None for Phase 9.
+- **HUMAN STEPS now required**:
+  - None for Phase 9.
+- **Exact next step**:
+  - Commit Phase 9 and push to `origin main`.
+  - Proceed to Phase 10 (Full Multi-Stage Pipeline: VAD, Diarization, Enhance, Transcripts).
+
+---
+
 ## Phase Status Summary Table
 
 | Phase | Title | Status | Completion Date |
@@ -333,7 +368,7 @@ This document records the exact chronological status of Awaaz development across
 | Phase 6 | Colab Runner & Persistence | COMPLETED | 2026-10-27 |
 | Phase 7 | Evaluation & Decoding | COMPLETED | 2026-10-27 |
 | Phase 8 | Streaming Inference | COMPLETED | 2026-10-27 |
-| Phase 9 | Export, Quantization & Edge Budget | QUEUED | - |
+| Phase 9 | Export, Quantization & Edge Budget | COMPLETED | 2026-10-27 |
 | Phase 10 | Full Pipeline (VAD, Diarization, Enhance) | QUEUED | - |
 | Phase 11 | Optional v2 Models (Enhancer & Separation) | QUEUED | - |
 | Phase 12 | Demo, Docs, Model Card & Release | QUEUED | - |
