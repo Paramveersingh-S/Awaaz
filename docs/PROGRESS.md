@@ -247,6 +247,42 @@ This document records the exact chronological status of Awaaz development across
 
 ---
 
+## Phase 7: Evaluation and Decoding
+- **Date**: 2026-10-27
+- **Status**: COMPLETED
+- **What was built**:
+  - `awaaz/decode.py`:
+    - `ctc_greedy_decode`: Vectorized argmax decoding, consecutive repeat collapse, blank token removal (ID 0), and SentencePiece detokenization. Supports both batched 3D and 2D log-probability tensors.
+    - `extract_word_timestamps`: Computes approximate word start and end times from CTC emission spikes using acoustic frame-to-time conversion ($\Delta t = 40\text{ ms}$) and SentencePiece word-boundary grouping (`\u2581`).
+    - `ctc_beam_search_decode`: Feature-flagged beam search interface with KenLM language model rescoring ($\alpha, \beta$), with graceful fallback to greedy decoding when optional dependencies are absent.
+  - `awaaz/metrics.py`:
+    - `compute_wer_cer`: Word Error Rate and Character Error Rate calculated via JiWER with safe handling of empty reference transcripts. Enforces §1.4 policy treating CER as primary for Punjabi orthography.
+    - `format_error_report`: Utterance-level error triage ranking sentences by descending WER to generate diagnostic triage reports.
+  - `awaaz/average.py`:
+    - Checkpoint weight averaging computing the parameter-wise arithmetic mean across top-$N$ checkpoints (`step_*.pt`). Preserves non-floating point buffers (e.g. step counters) from the latest checkpoint and writes atomically. CLI enabled (`python -m awaaz.average`).
+  - `awaaz/evaluate.py`:
+    - Multi-mode evaluation runner evaluating models across Offline (full context), Stream-0.64s (chunk 16, left 8), and Stream-0.32s (chunk 8, left 4).
+    - Generates markdown results table (`results.md`), JSON metrics summary (`results.json`), and top-20 worst utterances error triage (`error_analysis.txt`). CLI enabled (`python -m awaaz.evaluate`).
+  - `tests/test_phase7.py`:
+    - 6 unit/integration tests verifying hand-computed WER/CER metrics, error ranking, synthetic posterior collapse rules, exact word timestamp frame arithmetic, checkpoint parameter averaging, and end-to-end evaluation runner producing markdown reports.
+- **What was verified**:
+  - `pytest -v tests/test_phase7.py`: 6/6 passed in 4.04s.
+  - Full suite `pytest -v tests/`: 50/50 passed in 15.18s.
+  - `ruff check .`: 100% clean across all modules.
+- **What was NOT verified**:
+  - Evaluating against massive multi-hundred-hour test sets (HUMAN STEP on Colab).
+- **Decisions made / deviations from spec**:
+  - Inserted piece fallback in `extract_word_timestamps` to ensure single-character words whose SentencePiece decoding is purely whitespace are reconstructed faithfully from subword piece tokens.
+- **Open issues and risks**:
+  - None for Phase 7.
+- **HUMAN STEPS now required**:
+  - None for Phase 7.
+- **Exact next step**:
+  - Commit Phase 7 and push to `origin main`.
+  - Proceed to Phase 8 (Streaming Inference).
+
+---
+
 ## Phase Status Summary Table
 
 | Phase | Title | Status | Completion Date |
@@ -258,7 +294,7 @@ This document records the exact chronological status of Awaaz development across
 | Phase 4 | The Model (Conformer-CTC) | COMPLETED | 2026-10-27 |
 | Phase 5 | Training Loop | COMPLETED | 2026-10-27 |
 | Phase 6 | Colab Runner & Persistence | COMPLETED | 2026-10-27 |
-| Phase 7 | Evaluation & Decoding | QUEUED | - |
+| Phase 7 | Evaluation & Decoding | COMPLETED | 2026-10-27 |
 | Phase 8 | Streaming Inference | QUEUED | - |
 | Phase 9 | Export, Quantization & Edge Budget | QUEUED | - |
 | Phase 10 | Full Pipeline (VAD, Diarization, Enhance) | QUEUED | - |
