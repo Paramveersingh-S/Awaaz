@@ -80,3 +80,18 @@ This document records key architectural, algorithmic, and engineering decisions 
   - `eos_id`: -1 (disabled)
   - `normalization_rule_name`: "identity" (relying strictly on `awaaz.text.normalize`)
 - **Consequences**: Guaranteed idempotency and exact mathematical consistency across training, evaluation, ONNX export, and native edge runtimes.
+
+---
+
+## ADR-008: Model Presets and Measured Parameter Counts
+- **Date**: 2026-10-27
+- **Status**: ACCEPTED
+- **Context**: Phase 4 requires exact parameter counts for all presets to be verified within $\pm 15\%$ of specification and documented.
+- **Measured Parameters**:
+  | Preset | $d_{\text{model}}$ | Blocks | Heads | FFN Dim | Subsampling | Encoder Params | CTC Head | Total Parameters | Target | Deviation |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | `tiny` | 144 | 12 | 4 | 576 | 102,688 | 5,800,800 | 147,760 | **6,051,248** (~6.05M) | ~6M | **+0.85%** |
+  | `small` | 256 | 12 | 4 | 1024 | 174,368 | 18,225,408 | 262,448 | **18,663,008** (~18.66M) | ~19M | **-1.77%** |
+  | `base` | 384 | 16 | 6 | 1536 | 256,384 | 54,540,288 | 393,568 | **55,190,240** (~55.19M) | ~55M | **+0.35%** |
+- **Decision**: All three presets match targets within $< 2\%$ (well within the $\pm 15\%$ bound). Causal convolution kernel size is 15. All normalizations use LayerNorm. CTC projection head targets 1024 vocab.
+- **Consequences**: Confirmed ready for training, dynamic-chunk streaming, and int8 ONNX quantization.

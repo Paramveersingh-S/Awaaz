@@ -120,8 +120,46 @@ This document records the exact chronological status of Awaaz development across
 - **HUMAN STEPS now required**:
   - Run `colab_prepare_data.ipynb` in Colab with Hugging Face access tokens for full corpus downloads (scheduled in Phase 6).
 - **Exact next step**:
-  - Commit Phase 3 and push to `origin main`.
   - Proceed to Phase 4 (The Model: Conformer-CTC).
+
+---
+
+## Phase 4: The Model (Conformer-CTC)
+- **Date**: 2026-10-27
+- **Status**: COMPLETED
+- **What was built**:
+  - `awaaz/model.py`:
+    - `ConformerConfig`: Dataclass supporting presets (`tiny`, `small`, `base`) and YAML loading.
+    - `Conv2dSubsampling`: Factor 4 (and optional factor 8) 2D Conv subsampling front-end with exact length reduction formula $T_{\text{out}} = \lfloor (T_{\text{in}} - 1) / 2 \rfloor + 1$ applied twice.
+    - `RotaryEmbedding (RoPE)`: Relative positional encoding applied directly to Query and Key tensors in multi-head attention.
+    - `build_chunk_attention_mask`: Dynamic-chunk mask generator parameterized by `chunk_size` and `left_chunks` with strict future blocking and diagonal safety preventing softmax NaNs on padded rows.
+    - `RelMultiHeadAttention`: Multi-head attention with RoPE and scaling.
+    - `FeedForwardModule`: Macaron-style FFN with SiLU and LayerNorm ($0.5\times$ residual weighting).
+    - `CausalConvModule`: LayerNorm $\to$ Pointwise Conv $\to$ GLU $\to$ Causal Depthwise Conv (kernel 15, left-padding $K-1=14$) $\to$ LayerNorm $\to$ SiLU $\to$ Pointwise Conv $\to$ Dropout. Padded frames masked to zero before depthwise conv.
+    - `ConformerBlock`: Full Macaron block: FFN(0.5) $\to$ SelfAttention $\to$ ConvModule $\to$ FFN(0.5) $\to$ LayerNorm.
+    - `ConformerEncoder`: Stack of $N$ Conformer blocks.
+    - `CTCHead`: Linear projection from $d_{\text{model}} \to 1024$ emitting `log_softmax` probabilities.
+    - `ConformerCTC`: Full end-to-end model with `forward()` and `count_parameters()`.
+  - `docs/DECISIONS.md`: Recorded ADR-008 documenting exact measured parameter counts:
+    - `tiny`: 6,051,248 params (+0.85% from 6M target)
+    - `small`: 18,663,008 params (-1.77% from 19M target)
+    - `base`: 55,190,240 params (+0.35% from 55M target)
+  - `tests/test_phase4.py`: 6 acceptance tests covering shapes and subsampling formula, padding invariance (< 1e-4 diff), **chunk-causality verification** (< 1e-5 diff), gradient flow on all parameters, parameter count checks, and attention mask non-NaN properties.
+- **What was verified**:
+  - `pytest -v tests/test_phase4.py`: 6/6 passed in 4.54s.
+  - Entire test suite `pytest -q`: 33/33 passed in 7.89s.
+  - `ruff check .`: all checks passed cleanly.
+- **What was NOT verified**:
+  - Convergence on full 500-hour training dataset (scheduled for Phase 5/6).
+- **Decisions made / deviations from spec**:
+  - Preserved self-diagonal for padded rows in dynamic chunk mask to prevent softmax NaNs without corrupting valid frame outputs.
+- **Open issues and risks**:
+  - None for Phase 4.
+- **HUMAN STEPS now required**:
+  - None for Phase 4.
+- **Exact next step**:
+  - Commit Phase 4 and push to `origin main`.
+  - Proceed to Phase 5 (Training Loop).
 
 ---
 
@@ -133,7 +171,7 @@ This document records the exact chronological status of Awaaz development across
 | Phase 1 | Text Normalization & Tokenizer | COMPLETED | 2026-10-27 |
 | Phase 2 | Audio Features & Augmentation | COMPLETED | 2026-10-27 |
 | Phase 3 | Data Pipeline | COMPLETED | 2026-10-27 |
-| Phase 4 | The Model (Conformer-CTC) | QUEUED | - |
+| Phase 4 | The Model (Conformer-CTC) | COMPLETED | 2026-10-27 |
 | Phase 5 | Training Loop | QUEUED | - |
 | Phase 6 | Colab Runner & Persistence | QUEUED | - |
 | Phase 7 | Evaluation & Decoding | QUEUED | - |
