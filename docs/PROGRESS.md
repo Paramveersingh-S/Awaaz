@@ -163,6 +163,46 @@ This document records the exact chronological status of Awaaz development across
 
 ---
 
+## Phase 5: Training Loop
+- **Date**: 2026-10-27
+- **Status**: COMPLETED
+- **What was built**:
+  - `awaaz/train.py`:
+    - Full training loop supporting YAML configuration (`python -m awaaz.train --config ...`).
+    - AdamW optimizer ($\beta_1=0.9, \beta_2=0.98, \epsilon=10^{-9}$, weight decay $10^{-3}$) with gradient clipping at 5.0 and non-finite gradient skipping.
+    - Linear warmup + Cosine decay schedule (`build_lr_scheduler`).
+    - CTCLoss with blank index 0, zero_infinity=True, and float32 log-prob upcasting.
+    - Dynamic-chunk parameter sampling (`sample_chunk_params`) with prob 0.6 chunked ({8, 16, 32} frames, {2, 4, 8, unlimited} left chunks) and prob 0.4 full context.
+    - Atomic checkpointing (`save_checkpoint` to `last.pt` via temporary file and `os.replace`).
+    - Periodic numbered checkpoints (`step_XXXXXXX.pt`) with rolling history retention (keeps newest $K=12$).
+    - Automatic state resumption (`load_checkpoint` restoring model, optimizer, scaler, step, and epoch).
+    - Config-derived planning printout (trainable parameters, dataset hours per language, batches per epoch, throughput formula).
+    - Periodic evaluation hook computing validation WER and CER per language.
+    - Structured CSV telemetry (`train_log.csv`) and graceful CUDA OOM recovery.
+  - `docs/TRAINING.md`:
+    - Hardware budgeting and VRAM allocation guide (CPU, RTX 3050 4GB, T4 16GB, L4 24GB, A100 40/80GB).
+    - Budget hours to `total_steps` calculation formula (`total_steps = budget_hours * 3600 * steps_per_sec`).
+    - Common failure symptom diagnosis table covering flat loss, inf/NaN loss, CTC garbage decode, language imbalance, low GPU utilization, and CUDA OOM.
+  - `tests/test_phase5.py`:
+    - 6 unit/integration tests: LR scheduler warmup/cosine, dynamic chunk distribution, atomic checkpoint save/resume, greedy CTC decode, fixture overfit convergence (>70% loss drop in 75 steps), and `docs/TRAINING.md` validation.
+- **What was verified**:
+  - `pytest -v tests/test_phase5.py`: 6/6 passed in 9.98s.
+  - Full test suite `pytest -v tests/`: 39/39 passed in 14.99s.
+  - `ruff check .`: all checks passed cleanly.
+- **What was NOT verified**:
+  - Multi-day 100,000-step training run on real cloud GPU (HUMAN STEP for Phase 6).
+- **Decisions made / deviations from spec**:
+  - Added helper `hours_per_language()` to `AwaazDataset` to power the pre-training dataset balance report.
+- **Open issues and risks**:
+  - None for Phase 5.
+- **HUMAN STEPS now required**:
+  - None for Phase 5.
+- **Exact next step**:
+  - Commit Phase 5 and push to `origin main`.
+  - Proceed to Phase 6 (Colab Runner & Persistence).
+
+---
+
 ## Phase Status Summary Table
 
 | Phase | Title | Status | Completion Date |
@@ -172,7 +212,7 @@ This document records the exact chronological status of Awaaz development across
 | Phase 2 | Audio Features & Augmentation | COMPLETED | 2026-10-27 |
 | Phase 3 | Data Pipeline | COMPLETED | 2026-10-27 |
 | Phase 4 | The Model (Conformer-CTC) | COMPLETED | 2026-10-27 |
-| Phase 5 | Training Loop | QUEUED | - |
+| Phase 5 | Training Loop | COMPLETED | 2026-10-27 |
 | Phase 6 | Colab Runner & Persistence | QUEUED | - |
 | Phase 7 | Evaluation & Decoding | QUEUED | - |
 | Phase 8 | Streaming Inference | QUEUED | - |

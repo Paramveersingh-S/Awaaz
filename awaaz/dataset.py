@@ -167,6 +167,14 @@ class AwaazDataset(Dataset):
             "duration": item["duration"],
         }
 
+    def hours_per_language(self) -> Dict[str, float]:
+        """Calculates total audio hours grouped by language."""
+        totals: Dict[str, float] = {}
+        for item in self.items:
+            lang = item.get("language", "pa")
+            totals[lang] = totals.get(lang, 0.0) + (item.get("duration", 0.0) / 3600.0)
+        return totals
+
 
 def ctc_collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Collates variable-length waveforms and token sequences for CTC training.
