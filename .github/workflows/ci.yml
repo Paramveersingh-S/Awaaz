@@ -11,6 +11,7 @@ jobs:
     name: Lint and Fast CPU Tests
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.10", "3.11"]
 
@@ -45,5 +46,12 @@ jobs:
 
       - name: Run fast CPU test suite
         run: |
-          pytest -q tests/
+          pytest -v --tb=short tests/ 2>&1 | tee pytest_output.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            while IFS= read -r line; do
+              echo "::error::$line"
+            done < <(grep -E 'FAILED|ERROR|ModuleNotFoundError|ImportError' pytest_output.log | head -n 30)
+            exit 1
+          fi
+
 
