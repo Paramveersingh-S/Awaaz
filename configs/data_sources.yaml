@@ -1,0 +1,65 @@
+# Candidate Data Sources Configuration for Awaaz
+# Verifications documented in DATA_LICENSES.md
+
+sources:
+  common_voice_en:
+    name: "Common Voice 16.1 English"
+    hf_id: "mozilla-foundation/common_voice_16_1"
+    language: "en"
+    license: "CC0-1.0"
+    split: "train"
+    text_column: "sentence"
+    audio_column: "audio"
+    target_hours: 150
+    notes: "Permissive CC0 conversational English"
+
+  common_voice_pa:
+    name: "Common Voice 16.1 Punjabi"
+    hf_id: "mozilla-foundation/common_voice_16_1"
+    language: "pa"
+    license: "CC0-1.0"
+    split: "train"
+    text_column: "sentence"
+    audio_column: "audio"
+    target_hours: 80
+    notes: "Permissive CC0 crowdsourced Punjabi speech"
+
+  fleurs_en:
+    name: "FLEURS English"
+    hf_id: "google/fleurs"
+    subset: "en_us"
+    language: "en"
+    license: "CC-BY-4.0"
+    split: "dev"
+    text_column: "transcription"
+    audio_column: "audio"
+    notes: "Used strictly for evaluation/benchmark"
+
+  fleurs_pa:
+    name: "FLEURS Punjabi"
+    hf_id: "google/fleurs"
+    subset: "pa_in"
+    language: "pa"
+    license: "CC-BY-4.0"
+    split: "dev"
+    text_column: "transcription"
+    audio_column: "audio"
+    notes: "Used strictly for evaluation/benchmark"
+
+  indic_voices_pa:
+    name: "IndicVoices Punjabi"
+    hf_id: "ai4bharat/IndicVoices"
+    language: "pa"
+    license: "CC-BY-4.0 / Research"
+    split: "train"
+    text_column: "verbatim_text"
+    audio_column: "audio"
+    notes: "Gated AI4Bharat dataset; requires user token"
+
+text_corpora:
+  punjabi_wiki:
+    name: "Punjabi Wikipedia"
+    url: "https://dumps.wikimedia.org/pawiki/"
+    language: "pa"
+    license: "CC-BY-SA-3.0"
+    notes: "For SentencePiece balanced vocabulary training"

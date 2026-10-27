@@ -1,0 +1,41 @@
+# Awaaz Tiny Preset — ~6M Parameters
+# Optimized for Smartwatches (Wear OS / watchOS) and low-power IoT
+
+model:
+  name: "tiny"
+  n_mels: 80
+  d_model: 144
+  num_blocks: 12
+  num_heads: 4
+  ffn_dim: 576
+  conv_kernel_size: 15
+  dropout: 0.1
+  subsample_factor: 4
+  vocab_size: 1024
+  causal_conv: true
+
+frontend:
+  sample_rate: 16000
+  window_size_ms: 25
+  hop_size_ms: 10
+  n_fft: 400
+  n_mels: 80
+  f_min: 20.0
+  f_max: 7600.0
+  log_floor: 1e-5
+
+training:
+  batch_seconds: 240
+  total_steps: 50000
+  warmup_steps: 5000
+  peak_lr: 1.0e-3
+  min_lr: 1.0e-5
+  weight_decay: 1.0e-3
+  clip_grad_norm: 5.0
+  eval_every: 2000
+  save_every: 500
+  keep_checkpoints: 12
+  chunk_prob: 0.6
+  chunk_sizes: [8, 16, 32]
+  left_chunks: [2, 4, 8, -1]
+  exclude_sacred: true

@@ -1,0 +1,92 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "awaaz"
+version = "0.1.0"
+description = "A small, edge-capable bilingual (English + Punjabi Gurmukhi) streaming speech-to-text system with speaker diarization and audio smoothing."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Paramveer Singh", email = "paramveer@example.com" }
+]
+keywords = [
+    "asr",
+    "speech-recognition",
+    "punjabi",
+    "gurmukhi",
+    "conformer",
+    "ctc",
+    "edge-ai",
+    "wearables",
+    "streaming-asr"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Multimedia :: Sound/Audio :: Speech"
+]
+
+dependencies = [
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    "soundfile>=0.12.0",
+    "sentencepiece>=0.1.99",
+    "jiwer>=3.0.0",
+    "pyyaml>=6.0",
+    "huggingface_hub>=0.19.0",
+    "numpy>=1.24.0"
+]
+
+[project.optional-dependencies]
+pipeline = [
+    "silero-vad>=4.0",
+    "speechbrain>=0.5.15",
+    "scikit-learn>=1.2.0"
+]
+export = [
+    "onnx>=1.14.0",
+    "onnxruntime>=1.15.0"
+]
+dev = [
+    "pytest>=7.0.0",
+    "ruff>=0.1.0"
+]
+all = [
+    "silero-vad>=4.0",
+    "speechbrain>=0.5.15",
+    "scikit-learn>=1.2.0",
+    "onnx>=1.14.0",
+    "onnxruntime>=1.15.0",
+    "pytest>=7.0.0",
+    "ruff>=0.1.0"
+]
+
+[project.scripts]
+awaaz = "awaaz.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["awaaz*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --strict-markers"
