@@ -99,4 +99,6 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "-v --strict-markers"
+pythonpath = ["."]
+addopts = "-v --strict-markers --tb=short"
+

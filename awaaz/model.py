@@ -167,7 +167,7 @@ def build_chunk_attention_mask(
         allowed = valid_key
 
     # Softmax NaN safety: guarantee diagonal position (q, q) is allowed for padded rows
-    diag = torch.eye(seq_len, dtype=torch.bool, device=device).view(1, 1, seq_len, seq_len)
+    diag = (q_idx == k_idx)
     is_padded_q = q_idx >= lengths.view(-1, 1, 1, 1)
     allowed = allowed | (is_padded_q & diag)
 

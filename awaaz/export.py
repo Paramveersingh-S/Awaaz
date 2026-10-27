@@ -113,16 +113,26 @@ def export_to_onnx(
         out_p,
     )
 
+    export_kwargs = {
+        "input_names": ["features", "feature_lengths"],
+        "output_names": ["log_probs", "output_lengths"],
+        "dynamic_axes": dynamic_axes,
+        "opset_version": opset_version,
+        "do_constant_folding": True,
+    }
+    try:
+        import inspect
+        if "dynamo" in inspect.signature(torch.onnx.export).parameters:
+            export_kwargs["dynamo"] = False
+    except Exception:
+        pass
+
     with torch.no_grad():
         torch.onnx.export(
             wrapper,
             (dummy_features, dummy_lengths),
             str(out_p),
-            input_names=["features", "feature_lengths"],
-            output_names=["log_probs", "output_lengths"],
-            dynamic_axes=dynamic_axes,
-            opset_version=opset_version,
-            do_constant_folding=True,
+            **export_kwargs,
         )
 
     # Validate ONNX graph structure
