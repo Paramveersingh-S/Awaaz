@@ -358,8 +358,8 @@ class WaveformAugmenter:
             audio = self.apply_gain(audio, gain)
 
         # Clamp peak to avoid clipping
-        peak = np.max(np.abs(audio))
-        if peak > 0.99:
+        peak = float(np.max(np.abs(audio)))
+        if peak > 0.95:
             audio = audio * (0.95 / peak)
 
         return audio.astype(np.float32)

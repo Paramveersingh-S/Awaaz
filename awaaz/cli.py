@@ -168,10 +168,9 @@ def run_transcribe_pipeline(args: argparse.Namespace) -> str:
                 logits_tensor, _ = model(feats, feats_lens)
 
         words_with_times = extract_word_timestamps(
-            logits=logits_tensor,
+            log_probs=logits_tensor,
             tokenizer=tokenizer,
-            sample_rate=sr,
-            subsampling_factor=4,
+            subsample_factor=4,
             hop_ms=10.0,
         )
     else:

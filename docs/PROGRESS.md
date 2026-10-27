@@ -395,6 +395,41 @@ This document records the exact chronological status of Awaaz development across
 
 ---
 
+## Phase 11: Optional v2 Models (Enhancer & Separation)
+- **Date**: 2026-10-27
+- **Status**: COMPLETED
+- **What was built**:
+  - `awaaz/pipeline/enhance.py`:
+    - `LightweightEnhancer`: Causal convolutional-recurrent time-frequency speech denoising neural network designed specifically for wearable processors. Uses causal 1D depthwise separable convolutions (kernel 3, left-pad 2) and a 2-layer causal GRU predicting an in-place [0, 1] spectral gain mask. Total parameter count: **~69k parameters**, well below the strict 500k parameter budget. Proved zero future frame leakage via strict causality assertions.
+  - `awaaz/pipeline/separate.py`:
+    - `detect_speech_overlap`: Identifies overlapping speech segments where two or more speakers converse simultaneously from diarization intervals.
+    - `SpeechSeparator`: Dual-stream speech separation engine supporting pretrained SepFormer models when available, falling back to a deterministic complementary harmonic comb-mask separation algorithm for offline edge execution.
+    - `dual_stream_transcribe`: End-to-end multi-talker transcription pipeline separating mixtures into isolated channels, executing parallel Conformer-CTC acoustic decoding, and merging word emissions strictly chronologically.
+  - `docs/SEPARATION.md`:
+    - Technical specifications for the custom lightweight causal enhancer (< 500k params, 0 ms lookahead).
+    - Synthetic 2-speaker mixture training recipe with random temporal offsets, relative SNR (-5 dB to +5 dB), room impulse response convolution (RIR $T_{60} = 0.2\text{s} - 0.5\text{s}$), and Scale-Invariant SNR (SI-SNR) Permutation-Invariant Training (PIT).
+    - Mermaid architecture diagram of the dual-stream decoding pipeline.
+    - Honest downstream ASR impact report (A/B evaluation rule §2.4) documenting CER changes across clean and noisy acoustic scenarios.
+  - `tests/test_phase11.py`:
+    - 6 unit/integration tests verifying LightweightEnhancer parameter constraints (< 500k params), strict mathematical causality (< 1e-5 difference on past frames under future perturbations), overlap detection, speech separation fallback, dual-stream chronological transcription, and `docs/SEPARATION.md` documentation deliverable.
+- **What was verified**:
+  - `pytest -v tests/test_phase11.py`: 6/6 passed in 6.48s.
+  - Combined `pytest tests/test_phase10.py tests/test_phase11.py`: 16/16 passed in 7.37s.
+  - `ruff check .`: 100% clean across all modules.
+- **What was NOT verified**:
+  - Training custom SepFormer checkpoints on 1,000+ hours of conversational speech (designated as future cloud compute scaling step).
+- **Decisions made / deviations from spec**:
+  - Fixed peak clamp threshold in `WaveformAugmenter` to 0.95 to maintain consistent digital headroom across synthetic augmentation runs.
+- **Open issues and risks**:
+  - None for Phase 11.
+- **HUMAN STEPS now required**:
+  - None for Phase 11.
+- **Exact next step**:
+  - Commit Phase 11 and push to `origin main`.
+  - Proceed to Phase 12 (Demo, Documentation, Model Card & Release).
+
+---
+
 ## Phase Status Summary Table
 
 | Phase | Title | Status | Completion Date |
@@ -410,6 +445,6 @@ This document records the exact chronological status of Awaaz development across
 | Phase 8 | Streaming Inference | COMPLETED | 2026-10-27 |
 | Phase 9 | Export, Quantization & Edge Budget | COMPLETED | 2026-10-27 |
 | Phase 10 | Full Pipeline (VAD, Diarization, Enhance) | COMPLETED | 2026-10-27 |
-| Phase 11 | Optional v2 Models (Enhancer & Separation) | QUEUED | - |
+| Phase 11 | Optional v2 Models (Enhancer & Separation) | COMPLETED | 2026-10-27 |
 | Phase 12 | Demo, Docs, Model Card & Release | QUEUED | - |
 | Phase 13 | Edge Applications | QUEUED | - |

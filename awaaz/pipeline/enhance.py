@@ -1,23 +1,107 @@
 """Speech enhancement and audio denoising interface (Phase 10 & 11).
 
-Provides an interface for audio denoising models (e.g. DeepFilterNet) to generate
-smoothed per-speaker listening audio.
+Provides an interface for audio denoising models (e.g. DeepFilterNet) as well as
+a custom lightweight causal convolutional-recurrent enhancer (< 500k parameters)
+tailored for wearable hardware.
 """
 
 import logging
 
 import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
 
 # Optional DeepFilterNet import
 try:
-    import torch
     from df.enhance import enhance as df_enhance
     from df.enhance import init_df
     HAS_DEEPFILTER = True
 except ImportError:
     HAS_DEEPFILTER = False
+
+
+class CausalConv1d(nn.Module):
+    """Causal Conv1d layer with strict left-only padding (no future frame leakage)."""
+
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int = 3, **kwargs):
+        super().__init__()
+        self.pad = kernel_size - 1
+        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, **kwargs)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """x shape: [batch, channels, time]"""
+        if self.pad > 0:
+            x = F.pad(x, (self.pad, 0))
+        return self.conv(x)
+
+
+class LightweightEnhancer(nn.Module):
+    """Lightweight causal convolutional-recurrent speech enhancer (< 500k parameters).
+
+    Targeted for on-device and wearable processing. Uses causal 1D depthwise separable
+    convolutions and a 2-layer causal GRU to predict a time-frequency gain mask.
+    """
+
+    def __init__(self, num_bins: int = 80, hidden_dim: int = 64, num_gru_layers: int = 2) -> None:
+        super().__init__()
+        self.num_bins = num_bins
+        self.hidden_dim = hidden_dim
+
+        # Front-end projection & causal depthwise separable conv
+        self.in_proj = nn.Linear(num_bins, hidden_dim)
+        self.causal_conv = CausalConv1d(hidden_dim, hidden_dim, kernel_size=3, groups=hidden_dim)
+        self.pointwise_conv = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=1)
+        self.norm = nn.LayerNorm(hidden_dim)
+        self.act = nn.SiLU()
+
+        # Causal GRU core
+        self.gru = nn.GRU(
+            input_size=hidden_dim,
+            hidden_size=hidden_dim,
+            num_layers=num_gru_layers,
+            batch_first=True,
+        )
+
+        # Output mask projector
+        self.out_proj = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, num_bins),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Args:
+
+            x: Spectrogram or filterbank tensor of shape [batch, time, num_bins]
+
+        Returns:
+            enhanced_x: Masked spectrogram [batch, time, num_bins]
+        """
+        # Linear projection
+        h = self.in_proj(x)  # [B, T, H]
+
+        # Depthwise separable causal conv across time
+        h_conv = h.transpose(1, 2)  # [B, H, T]
+        h_conv = self.causal_conv(h_conv)
+        h_conv = self.pointwise_conv(h_conv)
+        h = h + h_conv.transpose(1, 2)  # Residual
+        h = self.act(self.norm(h))
+
+        # GRU recurrent temporal modeling
+        out, _ = self.gru(h)
+
+        # Predict spectral gain mask in [0, 1]
+        gain_mask = self.out_proj(out)
+
+        # Apply mask
+        return x * gain_mask
+
+    def count_parameters(self) -> int:
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
 
 class SpeechEnhancer:
@@ -85,7 +169,7 @@ class SpeechEnhancer:
     ) -> np.ndarray:
         """Lightweight, non-causal spectral gating fallback for audio smoothing."""
         frame_len = int(sample_rate * 0.030)  # 30ms
-        hop_len = int(sample_rate * 0.015)    # 15ms
+        hop_len = int(sample_rate * 0.015)  # 15ms
         if len(audio) < frame_len:
             return audio
 
