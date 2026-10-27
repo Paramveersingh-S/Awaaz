@@ -235,6 +235,7 @@ def quantize_int8(onnx_path: str, output_path: str) -> str:
     quantize_dynamic(
         model_input=onnx_path,
         model_output=str(out_p),
+        op_types_to_quantize=["MatMul", "Gemm"],
         weight_type=QuantType.QInt8,
     )
 
