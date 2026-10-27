@@ -7,6 +7,7 @@ streaming chunk simulation, and multi-format transcript export (TXT, SRT, JSON).
 
 import argparse
 import sys
+from pathlib import Path
 from typing import Optional, Tuple
 
 # Ensure UTF-8 output encoding
@@ -184,6 +185,23 @@ def build_app():
             inputs=[audio_input, mode_select, diarize_chk, enhance_chk, speakers_num],
             outputs=[txt_display, srt_display, json_display, lang_output],
         )
+
+        samples_dir = Path(__file__).resolve().parent / "samples"
+        sample_files = [
+            [str(samples_dir / "punjabi_greeting.wav"), "Offline (Full Context)", True, False, 1],
+            [str(samples_dir / "english_command.wav"), "Streaming-640ms (Chunk 16, Left 8)", True, False, 1],
+            [str(samples_dir / "bilingual_meeting.wav"), "Offline (Full Context)", True, False, 2],
+        ]
+        available_samples = [s for s in sample_files if Path(s[0]).exists()]
+        if available_samples:
+            gr.Examples(
+                examples=available_samples,
+                inputs=[audio_input, mode_select, diarize_chk, enhance_chk, speakers_num],
+                outputs=[txt_display, srt_display, json_display, lang_output],
+                fn=transcribe_audio_pipeline,
+                cache_examples=False,
+                label="💡 Quick Click-to-Test Audio Samples",
+            )
 
         gr.Markdown(
             """

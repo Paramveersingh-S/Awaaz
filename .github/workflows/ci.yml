@@ -24,6 +24,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
 
+      - name: Install system audio dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsndfile1 ffmpeg
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -36,8 +41,9 @@ jobs:
 
       - name: Generate synthetic fixture
         run: |
-          python scripts/make_fixture.py --output_dir tests/fixtures
+          python scripts/make_fixture.py --output_dir tests/fixtures/synthetic
 
       - name: Run fast CPU test suite
         run: |
           pytest -q tests/
+

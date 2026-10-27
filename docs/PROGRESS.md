@@ -511,6 +511,22 @@ This document records the exact chronological status of Awaaz development across
 
 ---
 
+## Post-Phase Hardening: CI Pipeline & Interactive Model Serving
+- **Date**: 2026-10-27
+- **Status**: COMPLETED
+- **What was built**:
+  - Comprehensive CI dependency updates in `pyproject.toml` (`dev` and `all` sets including `onnx`, `onnxruntime`, `onnxscript`, `scikit-learn`, `scipy`, `gradio`).
+  - `.github/workflows/ci.yml` upgraded with system audio libraries (`libsndfile1`, `ffmpeg`), headless CPU torch installation, and automated synthetic fixture generation.
+  - Interactive Gradio demo app (`app/app.py`) upgraded with click-to-test sample audio suite (`app/samples/`) covering Punjabi greetings, English commands, and bilingual 2-speaker diarization.
+- **What was verified**:
+  - Full test suite: 87/87 tests passing on CPU.
+  - `ruff check .` passing 100% clean.
+  - Gradio server launchable on `http://localhost:7860` as background service.
+- **Next step**:
+  - Commit CI workflow fixes, push to `origin main`, verify GitHub Actions green status, and serve Gradio web application for user interaction.
+
+---
+
 ## Phase Status Summary Table
 
 | Phase | Title | Status | Completion Date |
