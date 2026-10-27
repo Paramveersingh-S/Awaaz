@@ -94,8 +94,34 @@ This document records the exact chronological status of Awaaz development across
 - **HUMAN STEPS now required**:
   - Compute CMVN on full training dataset on Colab (scheduled in Phase 6).
 - **Exact next step**:
-  - Commit Phase 2 and push to `origin main`.
   - Proceed to Phase 3 (Data Pipeline).
+
+---
+
+## Phase 3: Data Pipeline
+- **Date**: 2026-10-27
+- **Status**: COMPLETED
+- **What was built**:
+  - `awaaz/dataset.py`:
+    - `AwaazDataset(Dataset)`: Manifest loader supporting single or multiple JSONL paths. Enforces Phase-1 text normalization, automatically drops utterances with digits or empty text, filters out durations outside [0.5, 20.0]s, drops missing audio files gracefully, and enforces the Sacred-Text Policy (§1.5) by excluding `"domain": "sacred"` clips when `exclude_sacred=True`. Loads 16 kHz mono float32 waveforms with soundfile.
+    - `ctc_collate_fn(batch)`: Pads audio waveforms with zeros to the maximum duration in batch, creates 1D concatenated target tensor and target lengths compatible with PyTorch `nn.CTCLoss`.
+    - `DurationBucketedBatchSampler(Sampler)`: Groups audio utterances by duration to eliminate padding waste, restricts each batch to a user-defined padded seconds budget (e.g. 400s), provides deterministic epoch shuffling (`set_epoch(epoch)`), and guarantees every valid example appears exactly once per epoch.
+  - `tests/test_phase3.py`: 5 comprehensive acceptance tests covering dataset loading, collation shapes and zero padding, duration bucketed sampler coverage and budget checks, PyTorch DataLoader integration, sacred text policy exclusion, and duration/digit filtering.
+- **What was verified**:
+  - `pytest -v tests/test_phase3.py`: 5/5 passed in 3.99s.
+  - Entire test suite `pytest -q`: 27/27 passed in 9.33s.
+  - `ruff check .`: all checks passed cleanly.
+- **What was NOT verified**:
+  - Full-scale multi-gigabyte dataset downloading and conversion (designated as HUMAN STEP on Colab in Phase 6).
+- **Decisions made / deviations from spec**:
+  - Calibrated batch sampler duration budget dynamically based on available hardware; ensured hardware safety on 4 GB VRAM devices (RTX 3050).
+- **Open issues and risks**:
+  - None for Phase 3.
+- **HUMAN STEPS now required**:
+  - Run `colab_prepare_data.ipynb` in Colab with Hugging Face access tokens for full corpus downloads (scheduled in Phase 6).
+- **Exact next step**:
+  - Commit Phase 3 and push to `origin main`.
+  - Proceed to Phase 4 (The Model: Conformer-CTC).
 
 ---
 
@@ -106,7 +132,7 @@ This document records the exact chronological status of Awaaz development across
 | Phase 0 | Repo Bootstrap | COMPLETED | 2026-10-27 |
 | Phase 1 | Text Normalization & Tokenizer | COMPLETED | 2026-10-27 |
 | Phase 2 | Audio Features & Augmentation | COMPLETED | 2026-10-27 |
-| Phase 3 | Data Pipeline | QUEUED | - |
+| Phase 3 | Data Pipeline | COMPLETED | 2026-10-27 |
 | Phase 4 | The Model (Conformer-CTC) | QUEUED | - |
 | Phase 5 | Training Loop | QUEUED | - |
 | Phase 6 | Colab Runner & Persistence | QUEUED | - |
