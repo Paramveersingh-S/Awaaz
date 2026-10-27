@@ -55,3 +55,28 @@ This document records key architectural, algorithmic, and engineering decisions 
 - **Context**: Per-utterance normalization requires whole-file statistics, which are impossible in real-time streaming and cause mismatch on short live audio chunks.
 - **Decision**: Compute global mean and variance once across 2,000 representative training utterances and bake these statistics into `cmvn.npz` buffers.
 - **Consequences**: Bit-exact feature consistency between offline and streaming runs, easily portable to Kotlin/Swift on-device frontends.
+
+---
+
+## ADR-007: Deterministic Bilingual Text Normalization Rules
+- **Date**: 2026-10-27
+- **Status**: ACCEPTED
+- **Context**: Discrepancies between training transcript normalization and runtime inference normalization silently ruin Word Error Rate (WER) and Character Error Rate (CER).
+- **Decision**: All training manifests, evaluations, and runtime inference must run through `awaaz.text.normalize(text)` applying these exact steps in strict sequence:
+  1. `unicodedata.normalize("NFC", text)`: Ensures canonical decomposition of Gurmukhi nukta characters into base consonant + nukta `\u0A3C`.
+  2. `text.lower()`: Lowercases Latin alphabet characters.
+  3. Digit detection: Drop utterance (`return None`) if containing ASCII digits `0–9` or Gurmukhi digits `\u0A66–\u0A6F`.
+  4. Standardize apostrophes: Typographic curly apostrophes (`’`, `‘`) converted to ASCII single quote `'` (`\u0027`).
+  5. Danda substitution: Gurmukhi danda `\u0964` and double danda `\u0965` replaced with a single space.
+  6. Whitelist character filtering: Strip all characters except `a–z`, Gurmukhi block `\u0A00–\u0A7F`, `'`, and space ` `.
+  7. Whitespace consolidation: Collapse multiple whitespace characters into single space; strip leading/trailing spaces.
+  8. Empty rejection: Return `None` if resulting string is empty.
+- **SentencePiece Parameters**:
+  - `vocab_size`: 1024
+  - `character_coverage`: 1.0
+  - `pad_id`: 0 (strictly reserved as the CTC Blank token)
+  - `unk_id`: 1
+  - `bos_id`: -1 (disabled)
+  - `eos_id`: -1 (disabled)
+  - `normalization_rule_name`: "identity" (relying strictly on `awaaz.text.normalize`)
+- **Consequences**: Guaranteed idempotency and exact mathematical consistency across training, evaluation, ONNX export, and native edge runtimes.

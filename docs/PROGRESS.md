@@ -34,8 +34,38 @@ This document records the exact chronological status of Awaaz development across
 - **HUMAN STEPS now required**:
   - None for Phase 0.
 - **Exact next step**:
-  - Commit Phase 0 files and push to `origin main`.
   - Proceed to Phase 1 (Text Normalization and Tokenizer).
+
+---
+
+## Phase 1: Text Normalization and Tokenizer
+- **Date**: 2026-10-27
+- **Status**: COMPLETED
+- **What was built**:
+  - `awaaz/text.py`:
+    - `normalize(text: Optional[str]) -> Optional[str]` implementing deterministic NFC Unicode normalization, lowercase, digit rejection (0-9 and Gurmukhi ੦-੯), curly-quote conversion, danda/double-danda substitution, character whitelist filtering, and whitespace collapsing.
+    - `Tokenizer` wrapper around `SentencePieceProcessor` with `encode`, `decode`, `encode_as_pieces`, `piece_to_id`, `id_to_piece`, `pad_id` (0), `blank_id` (0), `unk_id` (1).
+    - `train_tokenizer(...)` supporting JSONL manifests, text files, and text pairs with language balancing (50% English / 50% Punjabi) and SentencePiece unigram training (vocab 1024, character coverage 1.0, pad_id 0, unk_id 1, identity normalization).
+    - CLI subcommand: `python -m awaaz.text train-tokenizer`.
+  - `tests/test_phase1.py`:
+    - 9 comprehensive unit tests covering case normalization, apostrophe handling, danda replacement, digit rejection, emoji/punctuation filtering, empty string handling, nukta idempotency, SentencePiece training, round-trip equivalence, and language balance.
+  - `docs/DECISIONS.md`: Added ADR-007 detailing exact normalization rules and SentencePiece parameters.
+- **What was verified**:
+  - `pytest -v tests/test_phase1.py`: 9/9 passed in 0.46s.
+  - Entire test suite `pytest -v tests/`: 15/15 passed in 0.53s.
+  - `ruff check .`: all checks passed cleanly.
+  - `python -m awaaz.text train-tokenizer --help` executed with code 0.
+- **What was NOT verified**:
+  - Training the final production SentencePiece model on the multi-gigabyte Colab corpus (HUMAN STEP in Phase 6).
+- **Decisions made / deviations from spec**:
+  - Mapped typographic curly apostrophes (`’`, `‘`) to ASCII apostrophe `'` before filtering to prevent breaking contractions.
+- **Open issues and risks**:
+  - None for Phase 1.
+- **HUMAN STEPS now required**:
+  - Colab execution for real corpus tokenizer training (scheduled in Phase 6).
+- **Exact next step**:
+  - Commit Phase 1 and push to `origin main`.
+  - Proceed to Phase 2 (Audio Features and Augmentation).
 
 ---
 
@@ -44,7 +74,7 @@ This document records the exact chronological status of Awaaz development across
 | Phase | Title | Status | Completion Date |
 |---|---|---|---|
 | Phase 0 | Repo Bootstrap | COMPLETED | 2026-10-27 |
-| Phase 1 | Text Normalization & Tokenizer | QUEUED | - |
+| Phase 1 | Text Normalization & Tokenizer | COMPLETED | 2026-10-27 |
 | Phase 2 | Audio Features & Augmentation | QUEUED | - |
 | Phase 3 | Data Pipeline | QUEUED | - |
 | Phase 4 | The Model (Conformer-CTC) | QUEUED | - |
