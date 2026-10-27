@@ -232,6 +232,17 @@ def train(
 
     logger.info("Awaaz Training Initialized on %s (Mixed-Precision: %s)", device, use_amp)
 
+    # Optional Weights & Biases telemetry
+    has_wandb = False
+    if "WANDB_API_KEY" in os.environ:
+        try:
+            import wandb
+            wandb.init(project="awaaz", name=run_p.name, config=cfg)
+            has_wandb = True
+            logger.info("Weights & Biases telemetry initialized successfully.")
+        except Exception as e:
+            logger.warning("Could not initialize Weights & Biases: %s", e)
+
     # 2. Tokenizer and Frontend setup
     tok_p = tokenizer_path or cfg.get("tokenizer_path")
     if not tok_p or not Path(tok_p).is_file():
@@ -448,6 +459,18 @@ def train(
                     "Step %d/%d | Epoch %d | Loss: %.4f | LR: %.2e | Grad: %.2f | %.1f aud-s/s",
                     step, total_steps, epoch, loss_val, lr_now, norm_val, audio_sec_per_sec
                 )
+                if has_wandb:
+                    try:
+                        import wandb
+                        wandb.log({
+                            "train/loss": loss_val,
+                            "train/lr": lr_now,
+                            "train/grad_norm": norm_val,
+                            "train/audio_sec_per_sec": audio_sec_per_sec,
+                            "step": step,
+                        })
+                    except Exception:
+                        pass
 
             # Checkpoint save & Evaluation
             if step % save_every == 0 or step == total_steps:
@@ -466,8 +489,26 @@ def train(
                         eval_metrics["pa"]["wer"] * 100,
                         eval_metrics["pa"]["cer"] * 100,
                     )
+                    if has_wandb:
+                        try:
+                            import wandb
+                            wandb.log({
+                                "val/en_wer": eval_metrics["en"]["wer"],
+                                "val/en_cer": eval_metrics["en"]["cer"],
+                                "val/pa_wer": eval_metrics["pa"]["wer"],
+                                "val/pa_cer": eval_metrics["pa"]["cer"],
+                                "step": step,
+                            })
+                        except Exception:
+                            pass
 
     csv_fp.close()
+    if has_wandb:
+        try:
+            import wandb
+            wandb.finish()
+        except Exception:
+            pass
     logger.info("Training finished cleanly at step %d.", step)
 
 
