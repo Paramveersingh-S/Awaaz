@@ -135,7 +135,16 @@ python scripts/make_fixture.py --output_dir tests/fixtures/synthetic
 pytest -v
 ```
 
-### 4. CLI Transcription & Live Streaming
+### 4. Interactive Web Demo (Gradio)
+
+Launch the interactive local web application for live microphone streaming, file transcription, and multi-format subtitle export:
+
+```bash
+python app/app.py --port 7860
+```
+Open `http://localhost:7860` in your browser.
+
+### 5. CLI Transcription & Live Streaming
 
 ```bash
 # Offline transcription of an audio file
@@ -144,8 +153,11 @@ awaaz transcribe sample.flac --format srt
 # Multi-speaker transcription with diarization and track export
 awaaz transcribe meeting.wav --diarize --speakers 2 --format json --export-tracks ./output_tracks/
 
-# Real-time microphone streaming
-awaaz stream --chunk_ms 640
+# Real-time streaming recognizer simulation
+awaaz stream --audio sample.flac --chunk_ms 640
+
+# Manifest evaluation against reference transcripts
+awaaz evaluate --manifest manifests/test.jsonl
 ```
 
 ---
@@ -169,8 +181,9 @@ Awaaz features a modular voice processing suite under `awaaz/pipeline/`:
 1. **Voice Activity Detection (`awaaz.pipeline.vad`)**: Detects human speech bursts, applies 0.15s padding, and performs energy-aware chunk splitting at the quietest local boundary near 20 seconds.
 2. **Conformer ASR (`awaaz.model`)**: Transcribes acoustic chunks using bilingual dynamic-chunk attention.
 3. **Speaker Diarization (`awaaz.pipeline.diarize`)**: Extracts speaker embeddings using pretrained acoustic encoders and clusters speaker turns via Agglomerative Hierarchical Clustering.
-4. **Audio Smoothing (`awaaz.pipeline.enhance`)**: Applies high-fidelity speech denoising for clean listening playback.
-5. **Timeline Alignment (`awaaz.pipeline.merge`)**: Matches CTC token emission spikes to speaker windows and formats output into readable paragraphs, SRT/VTT subtitles, or structured JSON.
+4. **Audio Smoothing (`awaaz.pipeline.enhance`)**: Applies high-fidelity speech denoising (`LightweightEnhancer` or DeepFilterNet) for clean listening playback.
+5. **Overlapped-Speech Separation (`awaaz.pipeline.separate`)**: Identifies multi-speaker collisions and provides dual-stream decoding.
+6. **Timeline Alignment (`awaaz.pipeline.merge`)**: Matches CTC token emission spikes to speaker windows and formats output into readable paragraphs, SRT/VTT subtitles, or structured JSON.
 
 ---
 
@@ -181,40 +194,44 @@ The project execution is broken into 14 distinct, self-contained specifications:
 | Phase | Milestone | Specification | Output & Status |
 |---|---|---|---|
 | **Phase 0** | Repo Bootstrap | [PHASE_00.md](docs/phases/PHASE_00_REPO_BOOTSTRAP.md) | Skeleton, Packaging, CI, Synthetic Fixture (COMPLETED) |
-| **Phase 1** | Text Normalization & Tokenizer | [PHASE_01.md](docs/phases/PHASE_01_TEXT_NORMALIZATION_TOKENIZER.md) | Deterministic NFC Normalizer, 1024-Vocab SentencePiece |
-| **Phase 2** | Audio Features & Augmentation | [PHASE_02.md](docs/phases/PHASE_02_AUDIO_FEATURES_AUGMENTATION.md) | 80-bin Mel, Global CMVN, SpecAugment, Waveform Augmenters |
-| **Phase 3** | Data Pipeline | [PHASE_03.md](docs/phases/PHASE_03_DATA_PIPELINE.md) | JSONL Manifests, Duration-Bucketed Sampler, Balancing Tool |
-| **Phase 4** | Conformer-CTC Model | [PHASE_04.md](docs/phases/PHASE_04_MODEL.md) | PyTorch Conformer-CTC, RoPE Attention, Causality Tests |
-| **Phase 5** | Training Loop | [PHASE_05.md](docs/phases/PHASE_05_TRAINING_LOOP.md) | Resumable Dynamic-Chunk Trainer, Warmup-Cosine, Atomic Saves |
-| **Phase 6** | Colab Runner & Cloud Sync | [PHASE_06.md](docs/phases/PHASE_06_COLAB_RUNNER_PERSISTENCE.md) | GPU Cloud Notebooks, Drive Persistence, Checkpointing |
-| **Phase 7** | Evaluation & Decoding | [PHASE_07.md](docs/phases/PHASE_07_EVALUATION_DECODING.md) | WER/CER Evaluator, CTC Timestamps, Checkpoint Averaging |
-| **Phase 8** | Streaming Inference | [PHASE_08.md](docs/phases/PHASE_08_STREAMING_INFERENCE.md) | Real-time Sliding Window Recognizer, Latency Accounting |
-| **Phase 9** | Export, Quantization & Edge Budget | [PHASE_09.md](docs/phases/PHASE_09_EXPORT_QUANTIZATION_EDGE.md) | ONNX Export (opset 17), int8 Dynamic Quantization, Parity Kit |
-| **Phase 10** | Full Multi-Stage Pipeline | [PHASE_10.md](docs/phases/PHASE_10_FULL_PIPELINE.md) | VAD, Speaker Diarization, Denoising, Unified CLI |
-| **Phase 11** | Optional v2 Enhancer & Separation | [PHASE_11.md](docs/phases/PHASE_11_OPTIONAL_V2_MODELS.md) | Sub-500k Param Enhancer, Overlapped-Speech Separator |
-| **Phase 12** | Demo, Documentation & Release | [PHASE_12.md](docs/phases/PHASE_12_DEMO_DOCS_RELEASE.md) | Gradio Web App on Hugging Face Spaces, Model Card, Tags |
-| **Phase 13** | Edge Applications | [PHASE_13.md](docs/phases/PHASE_13_EDGE_APPS.md) | Wear OS (Kotlin) & iOS (Swift) Native Sample Apps |
+| **Phase 1** | Text Normalization & Tokenizer | [PHASE_01.md](docs/phases/PHASE_01_TEXT_NORMALIZATION_TOKENIZER.md) | Deterministic NFC Normalizer, 1024-Vocab SentencePiece (COMPLETED) |
+| **Phase 2** | Audio Features & Augmentation | [PHASE_02.md](docs/phases/PHASE_02_AUDIO_FEATURES_AUGMENTATION.md) | 80-bin Mel, Global CMVN, SpecAugment, Waveform Augmenters (COMPLETED) |
+| **Phase 3** | Data Pipeline | [PHASE_03.md](docs/phases/PHASE_03_DATA_PIPELINE.md) | JSONL Manifests, Duration-Bucketed Sampler, Balancing Tool (COMPLETED) |
+| **Phase 4** | Conformer-CTC Model | [PHASE_04.md](docs/phases/PHASE_04_MODEL.md) | PyTorch Conformer-CTC, RoPE Attention, Causality Tests (COMPLETED) |
+| **Phase 5** | Training Loop | [PHASE_05.md](docs/phases/PHASE_05_TRAINING_LOOP.md) | Resumable Dynamic-Chunk Trainer, Warmup-Cosine, Atomic Saves (COMPLETED) |
+| **Phase 6** | Colab Runner & Cloud Sync | [PHASE_06.md](docs/phases/PHASE_06_COLAB_RUNNER_PERSISTENCE.md) | GPU Cloud Notebooks, Drive Persistence, Checkpointing (COMPLETED) |
+| **Phase 7** | Evaluation & Decoding | [PHASE_07.md](docs/phases/PHASE_07_EVALUATION_DECODING.md) | WER/CER Evaluator, CTC Timestamps, Checkpoint Averaging (COMPLETED) |
+| **Phase 8** | Streaming Inference | [PHASE_08.md](docs/phases/PHASE_08_STREAMING_INFERENCE.md) | Real-time Sliding Window Recognizer, Latency Accounting (COMPLETED) |
+| **Phase 9** | Export, Quantization & Edge Budget | [PHASE_09.md](docs/phases/PHASE_09_EXPORT_QUANTIZATION_EDGE.md) | ONNX Export (opset 18), int8 Dynamic Quantization, Parity Kit (COMPLETED) |
+| **Phase 10** | Full Multi-Stage Pipeline | [PHASE_10.md](docs/phases/PHASE_10_FULL_PIPELINE.md) | VAD, Speaker Diarization, Denoising, Unified CLI (COMPLETED) |
+| **Phase 11** | Optional v2 Enhancer & Separation | [PHASE_11.md](docs/phases/PHASE_11_OPTIONAL_V2_MODELS.md) | Sub-500k Param Enhancer, Overlapped-Speech Separator (COMPLETED) |
+| **Phase 12** | Demo, Documentation & Release | [PHASE_12.md](docs/phases/PHASE_12_DEMO_DOCS_RELEASE.md) | Gradio Web App on Hugging Face Spaces, Model Card, Tags (COMPLETED) |
+| **Phase 13** | Edge Applications | [PHASE_13.md](docs/phases/PHASE_13_EDGE_APPS.md) | Wear OS (Kotlin), iOS (Swift), and Web (Wasm) Reference Apps |
 
 ---
 
 ## 📚 Documentation Index
 
 - **Master Specification**: [`docs/SPEC.md`](docs/SPEC.md)
-- **Global Agent Instructions**: [`AGENTS.md`](AGENTS.md)
+- **Model Card & Ethical Disclosures**: [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md)
 - **Living Progress Log**: [`docs/PROGRESS.md`](docs/PROGRESS.md)
 - **Architecture Decision Records (ADRs)**: [`docs/DECISIONS.md`](docs/DECISIONS.md)
-- **Model Card & Ethical Disclosures**: [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md)
+- **Edge Deployment & Hardware Budget**: [`docs/EDGE.md`](docs/EDGE.md)
+- **Streaming Latency & Cache Spec**: [`docs/STREAMING.md`](docs/STREAMING.md)
+- **v2 Enhancement & Separation**: [`docs/SEPARATION.md`](docs/SEPARATION.md)
+- **Language-Neutral Audio Features Spec**: [`docs/FEATURES.md`](docs/FEATURES.md)
+- **Training & VRAM Budgeting Guide**: [`docs/TRAINING.md`](docs/TRAINING.md)
+- **TPU / JAX Migration Roadmap**: [`docs/TPU.md`](docs/TPU.md)
 - **Dataset License Registry**: [`DATA_LICENSES.md`](DATA_LICENSES.md)
+- **Contributing Guidelines**: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- **Code of Conduct**: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
+- **Security Policy**: [`SECURITY.md`](SECURITY.md)
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions from researchers, linguists, and mobile engineers interested in low-resource speech technology and edge AI. Please ensure all contributions:
-- Adhere to the code formatting guidelines (`ruff check .`).
-- Include fast CPU unit tests (`pytest`).
-- Comply with the dataset licensing policy in `DATA_LICENSES.md`.
-- Respect the Sacred-Text Policy (§1.5).
+We welcome contributions from researchers, linguists, and mobile engineers interested in low-resource speech technology and edge AI. Please review [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) before submitting pull requests.
 
 ---
 

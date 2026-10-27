@@ -430,6 +430,43 @@ This document records the exact chronological status of Awaaz development across
 
 ---
 
+## Phase 12: Demo, Documentation, Model Card, and Release
+- **Date**: 2026-10-27
+- **Status**: COMPLETED
+- **What was built**:
+  - `app/app.py`:
+    - Full Gradio Web Application ready for Hugging Face Spaces.
+    - Features: audio file upload, live microphone recording, language ratio detection (English / Punjabi / Code-switched), inference latency mode selector (Offline, 640ms, 320ms), multi-speaker diarization toggle, speech enhancement toggle, and structured multi-format transcript export (TXT, SRT, JSON).
+    - Prominent notice on the Sacred-Text Policy (§1.5) and ethical boundaries.
+  - `docs/MODEL_CARD.md`:
+    - Standard ML Commons / Hugging Face model card detailing model architecture, presets (`tiny` 6M, `small` 19M, `base` 55M), intended applications, explicit out-of-scope uses (sacred religious text recitation, medical, legal, surveillance), dataset attribution (Common Voice, FLEURS, Shrutilipi), comprehensive WER/CER evaluation tables across modes, and dialectal biases (Majhi, Malwai, Doabi, Powadhi).
+  - Open-source community governance and issue templates:
+    - `CONTRIBUTING.md`: Developer guide with environment setup, AGENTS.md rules, and Sacred-Text Policy.
+    - `CODE_OF_CONDUCT.md`: Contributor Covenant v2.1 with theological respect clause.
+    - `SECURITY.md`: Security vulnerability reporting and response timeline.
+    - `.github/ISSUE_TEMPLATE/bug_report.md` and `.github/ISSUE_TEMPLATE/feature_request.md`.
+  - Master `README.md`:
+    - Updated quickstart with Gradio web app instructions, CLI workflows, updated phase roadmap, and complete documentation index.
+  - `tests/test_phase12.py`:
+    - 5 unit/integration tests verifying heuristic language identification, app transcription callback with valid format outputs, Gradio interface construction, model card schema compliance, and community governance document verification.
+- **What was verified**:
+  - `pytest -v tests/test_phase12.py`: 5/5 passed in 13.35s with 0 warnings.
+  - Full suite `pytest tests/test_phase10.py tests/test_phase11.py tests/test_phase12.py`: 21/21 passed.
+  - `ruff check .`: 100% clean across all modules.
+- **What was NOT verified**:
+  - Deploying live Gradio instance to public Hugging Face Spaces (requires personal HF Space token; marked as HUMAN STEP).
+- **Decisions made / deviations from spec**:
+  - Injected custom CSS via `gr.HTML` within Gradio Blocks to ensure seamless backward and forward compatibility across Gradio 4.x, 5.x, and 6.x without deprecation warnings.
+- **Open issues and risks**:
+  - None for Phase 12.
+- **HUMAN STEPS now required**:
+  - Optional: Upload `app/app.py` to Hugging Face Spaces with public demo URL.
+- **Exact next step**:
+  - Commit Phase 12 and push to `origin main`.
+  - Proceed to Phase 13 (Edge Applications: Wear OS, iOS, Web).
+
+---
+
 ## Phase Status Summary Table
 
 | Phase | Title | Status | Completion Date |
@@ -446,5 +483,5 @@ This document records the exact chronological status of Awaaz development across
 | Phase 9 | Export, Quantization & Edge Budget | COMPLETED | 2026-10-27 |
 | Phase 10 | Full Pipeline (VAD, Diarization, Enhance) | COMPLETED | 2026-10-27 |
 | Phase 11 | Optional v2 Models (Enhancer & Separation) | COMPLETED | 2026-10-27 |
-| Phase 12 | Demo, Docs, Model Card & Release | QUEUED | - |
+| Phase 12 | Demo, Docs, Model Card & Release | COMPLETED | 2026-10-27 |
 | Phase 13 | Edge Applications | QUEUED | - |
