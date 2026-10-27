@@ -203,6 +203,50 @@ This document records the exact chronological status of Awaaz development across
 
 ---
 
+## Phase 6: Colab Runner and Persistence
+- **Date**: 2026-10-27
+- **Status**: COMPLETED
+- **What was built**:
+  - `notebooks/colab_prepare_data.ipynb`:
+    - Google Drive mounting and secret reading via `google.colab.userdata`.
+    - Package setup (`pip install -e .[pipeline,export]`).
+    - Automated FLEURS/Common Voice download via `scripts/prepare_hf.py`.
+    - Manifest merging and 50/50 language balancing via `scripts/merge_manifests.py`.
+    - Dataset compression to Google Drive tar archive with SHA-256 verification.
+    - Bilingual SentencePiece tokenizer training and global CMVN calculation.
+  - `notebooks/colab_train.ipynb`:
+    - Untarring audio dataset from Google Drive to local fast NVMe disk (`/content/data/`) to prevent IO bottlenecks.
+    - GPU architecture inspection and automatic `batch_seconds` recommendation (T4: 360s, L4: 600s, A100: 1200s, RTX 3050: 160s).
+    - 50-step measured throughput benchmark and Colab budget calculator (`total_steps = budget_hours * 3600 * steps_per_sec`).
+    - Resumable training cell writing directly to Google Drive with automatic restart capability.
+  - `notebooks/colab_export.ipynb`:
+    - Checkpoint weight averaging across top-$N$ checkpoints (`awaaz.average`).
+    - Bilingual offline and streaming evaluation suite (`awaaz.evaluate`).
+    - ONNX export (opset 17) for offline and streaming inference (`awaaz.export`).
+    - ONNX Runtime int8 dynamic quantization and artifact footprint inspection.
+  - `docs/TPU.md`:
+    - Architectural analysis of PyTorch/XLA dynamic audio lengths, compilation stalls, dynamic chunk masks, and CTC loss kernel limitations on TPUs.
+    - Migration roadmap to JAX/Flax featuring static duration bucketing, precompiled mask tables, native Optax CTC, and `jax.experimental.shard_map` multi-host pod parallelism.
+  - `tests/test_phase6.py`:
+    - 5 validation tests checking notebook parsing, JSON validity, mandatory pipeline cells, and `docs/TPU.md` completeness.
+- **What was verified**:
+  - `pytest -v tests/test_phase6.py`: 5/5 passed in 0.09s.
+  - Full suite `pytest -v tests/`: 44/44 passed in 15.23s.
+  - `ruff check .`: 100% clean formatting across all Python files and Jupyter notebooks.
+- **What was NOT verified**:
+  - Running the notebooks interactively on Google Colab Pro (designated as HUMAN STEP).
+- **Decisions made / deviations from spec**:
+  - Structured all notebook cells as thin wrappers executing packaged `awaaz` CLI tools to ensure zero code duplication between CLI and notebooks.
+- **Open issues and risks**:
+  - None for Phase 6.
+- **HUMAN STEPS now required**:
+  - Optional: Launch `notebooks/colab_train.ipynb` on Google Colab Pro to verify GPU throughput on T4/L4/A100 instances.
+- **Exact next step**:
+  - Commit Phase 6 and push to `origin main`.
+  - Proceed to Phase 7 (Evaluation & Decoding).
+
+---
+
 ## Phase Status Summary Table
 
 | Phase | Title | Status | Completion Date |
@@ -213,7 +257,7 @@ This document records the exact chronological status of Awaaz development across
 | Phase 3 | Data Pipeline | COMPLETED | 2026-10-27 |
 | Phase 4 | The Model (Conformer-CTC) | COMPLETED | 2026-10-27 |
 | Phase 5 | Training Loop | COMPLETED | 2026-10-27 |
-| Phase 6 | Colab Runner & Persistence | QUEUED | - |
+| Phase 6 | Colab Runner & Persistence | COMPLETED | 2026-10-27 |
 | Phase 7 | Evaluation & Decoding | QUEUED | - |
 | Phase 8 | Streaming Inference | QUEUED | - |
 | Phase 9 | Export, Quantization & Edge Budget | QUEUED | - |
