@@ -64,8 +64,38 @@ This document records the exact chronological status of Awaaz development across
 - **HUMAN STEPS now required**:
   - Colab execution for real corpus tokenizer training (scheduled in Phase 6).
 - **Exact next step**:
-  - Commit Phase 1 and push to `origin main`.
   - Proceed to Phase 2 (Audio Features and Augmentation).
+
+---
+
+## Phase 2: Audio Features and Augmentation
+- **Date**: 2026-10-27
+- **Status**: COMPLETED
+- **What was built**:
+  - `awaaz/features.py`:
+    - `LogMelSpectrogram(nn.Module)`: 16,000 Hz, 80-bin triangular mel filterbanks (20–7600 Hz), 25 ms periodic Hann window (400 samples), 10 ms hop (160 samples), centered reflection padding, natural log with 1e-5 floor. Output tensor shape `(batch, frames, 80)` matching exact frame formula `samples // 160 + 1`. Registered buffers for global CMVN `mean` and `std` of shape `(80,)` with `load_cmvn` and `save_cmvn` support.
+    - `compute_cmvn(...)`: CLI-runnable utility computing global mean and standard deviation vectors across sampled audio in JSONL manifests and exporting `cmvn.npz`.
+    - `SpecAugment(nn.Module)`: Frequency masking (2 masks, max width 27) and time masking (2 masks, max width 5% of valid length). Mask fill value is 0.0 (global normalized mean). Applied only in training mode and restricted strictly to valid unpadded frames. Strict identity pass-through in eval mode.
+    - `WaveformAugmenter`: Speed perturbation (0.9x, 1.0x, 1.1x via resampling), additive noise at random SNR 5–20 dB, room impulse response (RIR) convolution, random gain (±6 dB), and peak amplitude clamping.
+    - CLI subcommand: `python -m awaaz.features compute-cmvn`.
+  - `docs/FEATURES.md`: Language-neutral mathematical specification for Android (Kotlin/C++) and iOS (Swift) engineers detailing windowing, reflection padding, filterbank math, and numerical parity targets.
+  - `tests/test_phase2.py`: 7 acceptance unit tests covering output shapes, frame count formula, CMVN computation, save/load persistence, SpecAugment masking and eval mode identity, determinism, waveform speed/gain, and spec documentation existence.
+- **What was verified**:
+  - `pytest -v tests/test_phase2.py`: 7/7 passed.
+  - Entire test suite `pytest -q`: 22/22 passed in 6.44s.
+  - `ruff check .`: all checks passed cleanly.
+  - `python -m awaaz.features compute-cmvn --help` executed with code 0.
+- **What was NOT verified**:
+  - Computing CMVN on the multi-thousand-hour production dataset (Colab step).
+- **Decisions made / deviations from spec**:
+  - None; strictly implemented §1.4 and Phase 2 requirements.
+- **Open issues and risks**:
+  - None for Phase 2.
+- **HUMAN STEPS now required**:
+  - Compute CMVN on full training dataset on Colab (scheduled in Phase 6).
+- **Exact next step**:
+  - Commit Phase 2 and push to `origin main`.
+  - Proceed to Phase 3 (Data Pipeline).
 
 ---
 
@@ -75,7 +105,7 @@ This document records the exact chronological status of Awaaz development across
 |---|---|---|---|
 | Phase 0 | Repo Bootstrap | COMPLETED | 2026-10-27 |
 | Phase 1 | Text Normalization & Tokenizer | COMPLETED | 2026-10-27 |
-| Phase 2 | Audio Features & Augmentation | QUEUED | - |
+| Phase 2 | Audio Features & Augmentation | COMPLETED | 2026-10-27 |
 | Phase 3 | Data Pipeline | QUEUED | - |
 | Phase 4 | The Model (Conformer-CTC) | QUEUED | - |
 | Phase 5 | Training Loop | QUEUED | - |
