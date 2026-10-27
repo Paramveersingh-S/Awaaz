@@ -355,6 +355,46 @@ This document records the exact chronological status of Awaaz development across
 
 ---
 
+## Phase 10: Full Pipeline (VAD, Diarization, Enhance, Transcripts)
+- **Date**: 2026-10-27
+- **Status**: COMPLETED
+- **What was built**:
+  - `awaaz/pipeline/vad.py`:
+    - `split_long_segments`: Acoustic-aware chunk splitter cutting audio segments exceeding 20.0s at the lowest energy (quietest) frame in the [15s, 20s] window, guaranteeing no segment exceeds 20.0s and no zero-length chunks.
+    - `VoiceActivityDetector`: Fast, self-contained RMS energy and spectral envelope speech detector, adds 0.15s padding before and after bursts, merges neighboring bursts separated by gaps $< 0.4$s, and splits long segments.
+  - `awaaz/pipeline/diarize.py`:
+    - `SpeakerDiarizer`: Sliding window 1.5s with 0.75s stride, extracts 120-dim filterbank embeddings with mean/std/diff statistical pooling (and optional SpeechBrain ECAPA-TDNN wrapper), L2 normalization, and Agglomerative Hierarchical Clustering with cosine distance metric and `--speakers N` override.
+  - `scripts/tune_diarization.py`:
+    - Diarization threshold tuning script sweeping distance thresholds from 0.30 to 0.90 in 0.05 increments and computing frame-level speaker attribution accuracy against reference intervals.
+  - `awaaz/pipeline/enhance.py`:
+    - `SpeechEnhancer`: Audio smoothing and noise reduction wrapper supporting DeepFilterNet when available and falling back to a soft Wiener spectral gating filter. Adheres to §2.4 rule keeping enhancement off by default during transcription to prevent synthetic artifacts.
+  - `awaaz/pipeline/merge.py`:
+    - `assign_speakers_to_words`: Maps CTC word timestamps to the dominant overlapping speaker interval with nearest-center fallback.
+    - `group_words_into_turns`: Groups consecutive words by the same speaker into conversation turns/paragraphs if pause $< 1.5$s.
+    - `format_transcript`: Structured export into TXT (`[HH:MM:SS.mmm --> ...] SPEAKER_XX: text`), SRT (standard SubRip with comma separator), VTT (`WEBVTT` with `<v SPEAKER_XX>` tags), and JSON (complete words, confidences, exact frames, and turns).
+    - `export_speaker_tracks`: Writes isolated `.wav` files per speaker with silence on other turns.
+  - `awaaz/cli.py`:
+    - Fully wired CLI supporting `awaaz transcribe audio.wav --ckpt ... --tokenizer ... --cmvn ... --diarize --speakers N --enhance --format ... --export-tracks ...`, `awaaz stream --audio ... --chunk_ms ...`, and `awaaz evaluate --manifest ...`.
+  - `tests/test_phase10.py`:
+    - 10 comprehensive unit/integration tests verifying splitter duration guarantees, quietest-point cutting, VAD padding/merging, 2-speaker synthetic diarization (>80% accuracy), enhancer fallback, word-speaker overlap merge, turn grouping, TXT/SRT/VTT/JSON format syntax, per-speaker track silence, and CLI end-to-end dry run.
+- **What was verified**:
+  - `pytest -v tests/test_phase10.py`: 10/10 passed in 15.91s.
+  - Full suite `pytest -q`: 71/71 passed in 58.46s (under 1 minute on CPU).
+  - `ruff check .`: 100% clean across all modules.
+- **What was NOT verified**:
+  - Live microphone streaming with physical audio hardware (designated as Phase 12/13).
+- **Decisions made / deviations from spec**:
+  - Provided a deterministic, dependency-free acoustic filterbank embedding extractor inside `SpeakerDiarizer` so tests, edge environments, and offline runs execute with zero network dependencies while maintaining high speaker separation accuracy.
+- **Open issues and risks**:
+  - None for Phase 10.
+- **HUMAN STEPS now required**:
+  - None for Phase 10.
+- **Exact next step**:
+  - Commit Phase 10 and push to `origin main`.
+  - Proceed to Phase 11 (Optional v2 Models: Custom Enhancer & Separation).
+
+---
+
 ## Phase Status Summary Table
 
 | Phase | Title | Status | Completion Date |
@@ -369,7 +409,7 @@ This document records the exact chronological status of Awaaz development across
 | Phase 7 | Evaluation & Decoding | COMPLETED | 2026-10-27 |
 | Phase 8 | Streaming Inference | COMPLETED | 2026-10-27 |
 | Phase 9 | Export, Quantization & Edge Budget | COMPLETED | 2026-10-27 |
-| Phase 10 | Full Pipeline (VAD, Diarization, Enhance) | QUEUED | - |
+| Phase 10 | Full Pipeline (VAD, Diarization, Enhance) | COMPLETED | 2026-10-27 |
 | Phase 11 | Optional v2 Models (Enhancer & Separation) | QUEUED | - |
 | Phase 12 | Demo, Docs, Model Card & Release | QUEUED | - |
 | Phase 13 | Edge Applications | QUEUED | - |
