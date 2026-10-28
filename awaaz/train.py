@@ -219,6 +219,8 @@ def train(
     cmvn_path: Optional[str] = None,
     max_steps: Optional[int] = None,
     log_every: Optional[int] = None,
+    eval_every: Optional[int] = None,
+    save_every: Optional[int] = None,
 ) -> None:
     """Executes the complete training loop."""
     run_p = Path(run_dir)
@@ -341,8 +343,8 @@ def train(
     # Config-derived planning printout
     param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
     hours_per_lang = train_ds.hours_per_language()
-    save_every = int(train_cfg.get("save_every", 500))
-    eval_every = int(train_cfg.get("eval_every", 2000))
+    save_freq = save_every or int(train_cfg.get("save_every", 500))
+    eval_freq = eval_every or int(train_cfg.get("eval_every", 2000))
     keep_ckpts = int(train_cfg.get("keep_checkpoints", 12))
     log_freq = log_every or int(train_cfg.get("log_every", 10))
 
@@ -357,7 +359,8 @@ def train(
         f"  Batches per Epoch: {len(sampler)}",
         f"  Total Steps: {total_steps:,}",
         f"  Logging Frequency: every {log_freq} steps",
-        f"  Checkpoint Frequency: every {save_every} steps to {run_p / 'last.pt'}",
+        f"  Evaluation Frequency: every {eval_freq} steps",
+        f"  Checkpoint Frequency: every {save_freq} steps to {run_p / 'last.pt'}",
         "=" * 65,
     ])
     for line in plan_lines:
@@ -500,22 +503,21 @@ def train(
                         pass
 
             # Checkpoint save & Evaluation
-            if step % save_every == 0 or step == total_steps:
-                is_periodic = (step % eval_every == 0)
+            if step % save_freq == 0 or step == total_steps:
+                is_periodic = (step % eval_freq == 0) or (step == total_steps)
                 save_checkpoint(
                     run_dir, model, optimizer, scaler, step, epoch, cfg,
                     is_periodic=is_periodic, max_keep=keep_ckpts
                 )
                 if is_periodic and dev_loader is not None:
                     eval_metrics = evaluate(model, frontend, dev_loader, tokenizer, device)
-                    logger.info(
-                        "Step %d Validation: EN WER=%.2f%% CER=%.2f%% | PA WER=%.2f%% CER=%.2f%%",
-                        step,
-                        eval_metrics["en"]["wer"] * 100,
-                        eval_metrics["en"]["cer"] * 100,
-                        eval_metrics["pa"]["wer"] * 100,
-                        eval_metrics["pa"]["cer"] * 100,
+                    val_msg = (
+                        f"Step {step} Validation: EN WER={eval_metrics['en']['wer'] * 100:.2f}% "
+                        f"CER={eval_metrics['en']['cer'] * 100:.2f}% | PA "
+                        f"WER={eval_metrics['pa']['wer'] * 100:.2f}% CER={eval_metrics['pa']['cer'] * 100:.2f}%"
                     )
+                    logger.info(val_msg)
+                    print(val_msg, flush=True)
                     if has_wandb:
                         try:
                             import wandb
@@ -550,6 +552,8 @@ def main():
     parser.add_argument("--cmvn", type=str, default=None, help="CMVN .npz file override.")
     parser.add_argument("--max_steps", type=int, default=None, help="Override total steps (useful for smoke tests).")
     parser.add_argument("--log_every", type=int, default=10, help="Print progress every N steps (default: 10).")
+    parser.add_argument("--eval_every", type=int, default=None, help="Evaluation and checkpoint interval in steps.")
+    parser.add_argument("--save_every", type=int, default=None, help="Save last.pt interval in steps.")
 
     args = parser.parse_args()
 
@@ -563,6 +567,8 @@ def main():
         cmvn_path=args.cmvn,
         max_steps=args.max_steps,
         log_every=args.log_every,
+        eval_every=args.eval_every,
+        save_every=args.save_every,
     )
 
 
