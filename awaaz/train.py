@@ -77,7 +77,7 @@ def save_checkpoint(
     run_dir: Union[str, Path],
     model: nn.Module,
     optimizer: torch.optim.Optimizer,
-    scaler: Optional[torch.cuda.amp.GradScaler],
+    scaler: Optional[Any],
     step: int,
     epoch: int,
     config: Dict[str, Any],
@@ -124,7 +124,7 @@ def load_checkpoint(
     checkpoint_path: Union[str, Path],
     model: nn.Module,
     optimizer: Optional[torch.optim.Optimizer] = None,
-    scaler: Optional[torch.cuda.amp.GradScaler] = None,
+    scaler: Optional[Any] = None,
 ) -> Tuple[int, int]:
     """Restores model, optimizer, and scaler states from checkpoint.
 
@@ -228,7 +228,13 @@ def train(
     # 1. Device and precision setup
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     use_amp = device.type == "cuda"
-    scaler = torch.cuda.amp.GradScaler() if use_amp else None
+    if use_amp:
+        if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
+            scaler = torch.amp.GradScaler("cuda")
+        else:
+            scaler = torch.cuda.amp.GradScaler()
+    else:
+        scaler = None
 
     logger.info("Awaaz Training Initialized on %s (Mixed-Precision: %s)", device, use_amp)
 
@@ -395,7 +401,12 @@ def train(
             optimizer.zero_grad()
             try:
                 if use_amp:
-                    with torch.cuda.amp.autocast(dtype=torch.bfloat16):
+                    autocast_ctx = (
+                        torch.amp.autocast("cuda", dtype=torch.bfloat16)
+                        if hasattr(torch, "amp")
+                        else torch.cuda.amp.autocast(dtype=torch.bfloat16)
+                    )
+                    with autocast_ctx:
                         log_probs, out_lens = model(
                             features, feat_lens, chunk_size=chunk_size, left_chunks=left_chunks
                         )
@@ -454,7 +465,7 @@ def train(
             csv_writer.writerow([step, epoch, f"{loss_val:.4f}", f"{lr_now:.6e}", f"{norm_val:.3f}", f"{steps_per_sec:.2f}", f"{audio_sec_per_sec:.1f}"])
             csv_fp.flush()
 
-            if step % 50 == 0 or step == total_steps:
+            if step == 1 or step % 50 == 0 or step == total_steps:
                 logger.info(
                     "Step %d/%d | Epoch %d | Loss: %.4f | LR: %.2e | Grad: %.2f | %.1f aud-s/s",
                     step, total_steps, epoch, loss_val, lr_now, norm_val, audio_sec_per_sec
