@@ -23,11 +23,74 @@ try:
 except ImportError:
     HAS_GRADIO = False
 
+import numpy as np
+import torch
+
 from awaaz.cli import load_audio_mono_16k
+from awaaz.decode import ctc_greedy_decode, extract_word_timestamps
+from awaaz.features import LogMelSpectrogram
+from awaaz.model import ConformerConfig, ConformerCTC
 from awaaz.pipeline.diarize import SpeakerDiarizer
 from awaaz.pipeline.enhance import SpeechEnhancer
 from awaaz.pipeline.merge import assign_speakers_to_words, format_transcript
 from awaaz.pipeline.vad import VoiceActivityDetector
+from awaaz.text import Tokenizer
+
+_PIPELINE = {
+    "model": None,
+    "tokenizer": None,
+    "frontend": None,
+    "device": torch.device("cpu"),
+    "is_onnx": False,
+    "onnx_sess": None,
+}
+
+
+def load_model_pipeline(
+    checkpoint: Optional[str] = None,
+    tokenizer_path: Optional[str] = None,
+    cmvn_path: Optional[str] = None,
+    config_path: Optional[str] = None,
+    device: Optional[str] = None,
+) -> None:
+    """Initializes acoustic model and feature extractor for live Gradio transcription."""
+    global _PIPELINE
+    dev = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+    _PIPELINE["device"] = dev
+
+    if tokenizer_path and Path(tokenizer_path).is_file():
+        _PIPELINE["tokenizer"] = Tokenizer(tokenizer_path)
+
+    if checkpoint and Path(checkpoint).is_file():
+        ckpt_p = str(checkpoint)
+        if ckpt_p.endswith(".onnx"):
+            import onnxruntime as ort
+            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] if torch.cuda.is_available() else ["CPUExecutionProvider"]
+            _PIPELINE["onnx_sess"] = ort.InferenceSession(ckpt_p, providers=providers)
+            _PIPELINE["is_onnx"] = True
+        else:
+            cfg = None
+            if config_path and Path(config_path).is_file():
+                cfg = ConformerConfig.from_yaml(config_path)
+            else:
+                cfg = ConformerConfig.from_preset("small")
+            if _PIPELINE["tokenizer"]:
+                cfg.vocab_size = _PIPELINE["tokenizer"].vocab_size
+            cfg.dropout = 0.0
+
+            model = ConformerCTC(cfg).to(dev)
+            ckpt_data = torch.load(ckpt_p, map_location="cpu")
+            model_state = ckpt_data.get("model", ckpt_data)
+            model.load_state_dict(model_state, strict=False)
+            model.eval()
+            _PIPELINE["model"] = model
+
+    if _PIPELINE["tokenizer"]:
+        frontend = LogMelSpectrogram(sample_rate=16000, n_mels=80).to(dev)
+        if cmvn_path and Path(cmvn_path).is_file():
+            frontend.load_cmvn(cmvn_path)
+        frontend.eval()
+        _PIPELINE["frontend"] = frontend
 
 
 def detect_language_balance(text: str) -> str:
@@ -85,22 +148,85 @@ def transcribe_audio_pipeline(
         n_spk = int(num_speakers) if num_speakers and num_speakers > 0 else None
         speaker_intervals = diarizer.diarize(audio, speech_segments, num_speakers=n_spk)
 
-    # 4. Words & Timing
-    # Demo simulated words based on speech intervals
-    simulated_words = []
-    for i, (seg_s, seg_e) in enumerate(speech_segments):
-        seg_dur = seg_e - seg_s
-        # Sample placeholder tokens
-        w1 = ("sat", seg_s, round(seg_s + seg_dur * 0.3, 3))
-        w2 = ("sri", round(seg_s + seg_dur * 0.35, 3), round(seg_s + seg_dur * 0.65, 3))
-        w3 = ("akal", round(seg_s + seg_dur * 0.7, 3), seg_e)
-        simulated_words.extend([w1, w2, w3])
+    # 4. Words & Timing (Real Model Inference with Fallback)
+    annotated_input_words = []
+    if _PIPELINE["model"] is not None and _PIPELINE["tokenizer"] is not None:
+        tokenizer = _PIPELINE["tokenizer"]
+        frontend = _PIPELINE["frontend"]
+        dev = _PIPELINE["device"]
 
-    if not simulated_words:
-        simulated_words = [("speech", 0.0, total_duration)]
+        # Chunk parameters for streaming modes
+        chunk_size = None
+        left_chunks = -1
+        if "640ms" in mode or "16" in mode:
+            chunk_size = 16
+            left_chunks = 8
+        elif "320ms" in mode or "8" in mode:
+            chunk_size = 8
+            left_chunks = 4
+
+        waveform_t = torch.from_numpy(audio).unsqueeze(0).to(dev)
+        with torch.no_grad():
+            feats = frontend(waveform_t)
+            feat_lens = torch.tensor([feats.size(1)], dtype=torch.long, device=dev)
+            log_probs, out_lens = _PIPELINE["model"](
+                feats, feat_lens, chunk_size=chunk_size, left_chunks=left_chunks
+            )
+
+        try:
+            annotated_input_words = extract_word_timestamps(log_probs, tokenizer)
+        except Exception:
+            annotated_input_words = []
+
+        if not annotated_input_words:
+            hyps = ctc_greedy_decode(log_probs, out_lens, tokenizer)
+            text = hyps[0] if hyps else ""
+            if text.strip():
+                annotated_input_words = [(text.strip(), 0.0, round(total_duration, 3))]
+            else:
+                annotated_input_words = [("[no_speech_detected]", 0.0, round(total_duration, 3))]
+
+    elif _PIPELINE["onnx_sess"] is not None and _PIPELINE["tokenizer"] is not None:
+        tokenizer = _PIPELINE["tokenizer"]
+        frontend = _PIPELINE["frontend"]
+        dev = _PIPELINE["device"]
+        waveform_t = torch.from_numpy(audio).unsqueeze(0).to(dev)
+        with torch.no_grad():
+            feats = frontend(waveform_t).cpu().numpy()
+            feat_lens = np.array([feats.shape[1]], dtype=np.int64)
+
+        sess = _PIPELINE["onnx_sess"]
+        outputs = sess.run(None, {"features": feats, "feature_lengths": feat_lens})
+        log_probs = torch.from_numpy(outputs[0])
+        out_lens = torch.from_numpy(outputs[1])
+
+        try:
+            annotated_input_words = extract_word_timestamps(log_probs, tokenizer)
+        except Exception:
+            annotated_input_words = []
+
+        if not annotated_input_words:
+            hyps = ctc_greedy_decode(log_probs, out_lens, tokenizer)
+            text = hyps[0] if hyps else ""
+            if text.strip():
+                annotated_input_words = [(text.strip(), 0.0, round(total_duration, 3))]
+            else:
+                annotated_input_words = [("[no_speech_detected]", 0.0, round(total_duration, 3))]
+
+    else:
+        # Fallback simulated tokens if no model is loaded
+        for i, (seg_s, seg_e) in enumerate(speech_segments):
+            seg_dur = seg_e - seg_s
+            w1 = ("sat", seg_s, round(seg_s + seg_dur * 0.3, 3))
+            w2 = ("sri", round(seg_s + seg_dur * 0.35, 3), round(seg_s + seg_dur * 0.65, 3))
+            w3 = ("akal", round(seg_s + seg_dur * 0.7, 3), seg_e)
+            annotated_input_words.extend([w1, w2, w3])
+
+        if not annotated_input_words:
+            annotated_input_words = [("speech", 0.0, total_duration)]
 
     # 5. Merge Words & Speakers
-    annotated_words = assign_speakers_to_words(simulated_words, speaker_intervals)
+    annotated_words = assign_speakers_to_words(annotated_input_words, speaker_intervals)
 
     # 6. Generate Formats
     txt_out = format_transcript(annotated_words, output_format="txt")
@@ -215,6 +341,11 @@ def build_app():
 
 def main():
     parser = argparse.ArgumentParser(description="Awaaz Gradio Web Application")
+    parser.add_argument("--checkpoint", type=str, default=None, help="Path to .pt or .onnx model checkpoint.")
+    parser.add_argument("--tokenizer", type=str, default=None, help="Path to tokenizer.model file.")
+    parser.add_argument("--cmvn", type=str, default=None, help="Path to cmvn.npz file.")
+    parser.add_argument("--config", type=str, default=None, help="Path to YAML config file.")
+    parser.add_argument("--device", type=str, default=None, help="Compute device ('cuda' or 'cpu').")
     parser.add_argument("--port", type=int, default=7860, help="Web server port (default: 7860)")
     parser.add_argument("--share", action="store_true", help="Create public shareable link")
     args = parser.parse_args()
@@ -222,6 +353,17 @@ def main():
     if not HAS_GRADIO:
         print("[Awaaz] Gradio is not installed. Please install with: pip install gradio")
         return 1
+
+    if args.checkpoint or args.tokenizer:
+        print(f"[Awaaz] Loading model pipeline: checkpoint={args.checkpoint}, tokenizer={args.tokenizer}...")
+        load_model_pipeline(
+            checkpoint=args.checkpoint,
+            tokenizer_path=args.tokenizer,
+            cmvn_path=args.cmvn,
+            config_path=args.config,
+            device=args.device,
+        )
+        print("[Awaaz] Model pipeline loaded successfully.")
 
     app = build_app()
     app.launch(server_name="0.0.0.0", server_port=args.port, share=args.share)
