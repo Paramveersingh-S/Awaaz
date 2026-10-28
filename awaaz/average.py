@@ -32,10 +32,14 @@ def average_checkpoints(
         The output path string of the saved averaged checkpoint.
     """
     # 1. Resolve paths
+    def _extract_step(p: str) -> int:
+        digits = "".join(filter(str.isdigit, Path(p).stem))
+        return int(digits) if digits else 0
+
     if isinstance(checkpoint_paths, (str, Path)):
-        resolved = sorted(glob.glob(str(checkpoint_paths)))
+        resolved = sorted(glob.glob(str(checkpoint_paths)), key=_extract_step)
     else:
-        resolved = sorted([str(p) for p in checkpoint_paths])
+        resolved = sorted([str(p) for p in checkpoint_paths], key=_extract_step)
 
     if not resolved:
         raise FileNotFoundError(f"No checkpoint files found matching: {checkpoint_paths}")
