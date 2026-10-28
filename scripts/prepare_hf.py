@@ -49,7 +49,19 @@ def prepare_hf_dataset(
                 break
 
             audio_data = item.get(audio_column)
+            if not audio_data:
+                for cand in ["audio", "speech"]:
+                    if cand in item and item[cand]:
+                        audio_data = item[cand]
+                        break
+
             text = item.get(text_column, "")
+            if not text:
+                for cand in ["transcription", "raw_transcription", "sentence", "text"]:
+                    if cand in item and item[cand]:
+                        text = item[cand]
+                        break
+
             if not audio_data or not text:
                 continue
 
@@ -88,6 +100,8 @@ def prepare_hf_dataset(
             }
             f_out.write(json.dumps(entry, ensure_ascii=False) + "\n")
             count += 1
+            if count % 200 == 0:
+                logging.info("Progress: %d clips prepared for %s (%s)", count, dataset_id, split)
 
     logging.info("Prepared %d clips to %s", count, manifest_path)
     return str(manifest_path)
@@ -101,7 +115,7 @@ def main():
     parser.add_argument("--split", type=str, default="train", help="Dataset split.")
     parser.add_argument("--subset", type=str, default=None, help="Dataset subset/config.")
     parser.add_argument("--max_items", type=int, default=None, help="Maximum number of items for sanity check.")
-    parser.add_argument("--text_column", type=str, default="sentence", help="Transcript column name.")
+    parser.add_argument("--text_column", type=str, default="transcription", help="Transcript column name.")
     args = parser.parse_args()
 
     prepare_hf_dataset(
