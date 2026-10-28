@@ -58,14 +58,21 @@ def sample_chunk_params(
     chunk_prob: float = 0.6,
     chunk_sizes: Optional[List[int]] = None,
     left_chunks: Optional[List[int]] = None,
+    step: Optional[int] = None,
+    curriculum_steps: int = 5000,
 ) -> Tuple[Optional[int], int]:
     """Samples dynamic-chunk attention parameters for a training batch.
 
-    With probability chunk_prob, samples chunk_size and left_chunks.
+    With curriculum_steps, enforces 100% full-context attention for early steps
+    to allow the Conformer to establish stable acoustic-CTC alignments.
+    Then with probability chunk_prob, samples chunk_size and left_chunks.
     Otherwise returns (None, -1) for full-context attention.
     """
+    if step is not None and step < curriculum_steps:
+        return None, -1
+
     if chunk_sizes is None:
-        chunk_sizes = [8, 16, 32]
+        chunk_sizes = [8, 16, 32, 64]
     if left_chunks is None:
         left_chunks = [2, 4, 8, -1]
 
@@ -233,10 +240,11 @@ def train(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     use_amp = device.type == "cuda"
     if use_amp:
+        # bfloat16 has full dynamic range and does not underflow; disable loss scaling
         if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
-            scaler = torch.amp.GradScaler("cuda")
+            scaler = torch.amp.GradScaler("cuda", enabled=False)
         else:
-            scaler = torch.cuda.amp.GradScaler()
+            scaler = torch.cuda.amp.GradScaler(enabled=False)
     else:
         scaler = None
 
@@ -278,8 +286,10 @@ def train(
     peak_lr = float(train_cfg.get("peak_lr", 1e-3))
     min_lr = float(train_cfg.get("min_lr", 1e-5))
     warmup_steps = int(train_cfg.get("warmup_steps", 5000))
-    total_steps = max_steps or int(train_cfg.get("total_steps", 100000))
+    total_steps = int(train_cfg.get("total_steps", 100000))
+    target_steps = max_steps or total_steps
     weight_decay = float(train_cfg.get("weight_decay", 1e-3))
+    curriculum_steps = int(train_cfg.get("curriculum_steps", 5000))
 
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -297,7 +307,9 @@ def train(
     last_ckpt = run_p / "last.pt"
     if resume and last_ckpt.is_file():
         step, start_epoch = load_checkpoint(last_ckpt, model, optimizer, scaler)
-        scheduler.step(step)
+        # Advance scheduler smoothly to resumed step
+        for _ in range(step):
+            scheduler.step()
 
     # 6. Dataset and DataLoader setup
     m_train = manifest_train or cfg.get("manifest_train")
@@ -357,7 +369,7 @@ def train(
         plan_lines.append(f"  Dataset Hours ({lang}): {hrs:.2f} hrs")
     plan_lines.extend([
         f"  Batches per Epoch: {len(sampler)}",
-        f"  Total Steps: {total_steps:,}",
+        f"  Target Steps: {target_steps:,} (Schedule Horizon: {total_steps:,})",
         f"  Logging Frequency: every {log_freq} steps",
         f"  Evaluation Frequency: every {eval_freq} steps",
         f"  Checkpoint Frequency: every {save_freq} steps to {run_p / 'last.pt'}",
@@ -376,7 +388,7 @@ def train(
         csv_writer.writerow(["step", "epoch", "loss", "lr", "grad_norm", "steps_per_sec", "audio_sec_per_sec"])
         csv_fp.flush()
 
-    start_msg = f"Starting training loop from step {step} to {total_steps}..."
+    start_msg = f"Starting training loop from step {step} to {target_steps}..."
     logger.info(start_msg)
     print(start_msg, flush=True)
     model.train()
@@ -384,12 +396,12 @@ def train(
     epoch = start_epoch
     t_prev = time.time()
 
-    while step < total_steps:
+    while step < target_steps:
         sampler.set_epoch(epoch)
         epoch += 1
 
         for batch in train_loader:
-            if step >= total_steps:
+            if step >= target_steps:
                 break
 
             waveforms = batch["waveforms"].to(device)
@@ -409,8 +421,10 @@ def train(
             # 2. Dynamic-chunk parameter sampling
             chunk_size, left_chunks = sample_chunk_params(
                 chunk_prob=train_cfg.get("chunk_prob", 0.6),
-                chunk_sizes=train_cfg.get("chunk_sizes", [8, 16, 32]),
+                chunk_sizes=train_cfg.get("chunk_sizes", [8, 16, 32, 64]),
                 left_chunks=train_cfg.get("left_chunks", [2, 4, 8, -1]),
+                step=step,
+                curriculum_steps=curriculum_steps,
             )
 
             # 3. Forward pass & CTC loss
@@ -481,10 +495,10 @@ def train(
             csv_writer.writerow([step, epoch, f"{loss_val:.4f}", f"{lr_now:.6e}", f"{norm_val:.3f}", f"{steps_per_sec:.2f}", f"{audio_sec_per_sec:.1f}"])
             csv_fp.flush()
 
-            if step == 1 or step % log_freq == 0 or step == total_steps:
-                progress_pct = (step / total_steps) * 100.0
+            if step == 1 or step % log_freq == 0 or step == target_steps:
+                progress_pct = (step / target_steps) * 100.0
                 msg = (
-                    f"[{progress_pct:5.1f}%] Step {step}/{total_steps} | Epoch {epoch} | "
+                    f"[{progress_pct:5.1f}%] Step {step}/{target_steps} | Epoch {epoch} | "
                     f"Loss: {loss_val:.4f} | LR: {lr_now:.2e} | Grad: {norm_val:.2f} | {audio_sec_per_sec:.1f} aud-s/s"
                 )
                 logger.info(msg)
@@ -503,8 +517,8 @@ def train(
                         pass
 
             # Checkpoint save & Evaluation
-            if step % save_freq == 0 or step == total_steps:
-                is_periodic = (step % eval_freq == 0) or (step == total_steps)
+            if step % save_freq == 0 or step == target_steps:
+                is_periodic = (step % eval_freq == 0) or (step == target_steps)
                 save_checkpoint(
                     run_dir, model, optimizer, scaler, step, epoch, cfg,
                     is_periodic=is_periodic, max_keep=keep_ckpts

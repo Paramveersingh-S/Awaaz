@@ -408,7 +408,8 @@ class CTCHead(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         logits = self.linear(x)
-        return F.log_softmax(logits, dim=-1)
+        # Always compute log_softmax in float32 for CTCLoss numerical stability and gradient fidelity
+        return F.log_softmax(logits.float(), dim=-1)
 
 
 class ConformerCTC(nn.Module):
@@ -424,6 +425,15 @@ class ConformerCTC(nn.Module):
         )
         self.encoder = ConformerEncoder(config)
         self.ctc_head = CTCHead(d_model=config.d_model, vocab_size=config.vocab_size)
+        self._init_weights()
+
+    def _init_weights(self) -> None:
+        """Applies Xavier and Kaiming initialization across Conformer layers."""
+        for name, param in self.named_parameters():
+            if ("linear" in name or "proj" in name or "w_1" in name or "w_2" in name) and param.dim() > 1:
+                nn.init.xavier_uniform_(param)
+            elif "conv" in name and param.dim() > 1:
+                nn.init.kaiming_normal_(param, mode="fan_out", nonlinearity="relu")
 
     def forward(
         self,
