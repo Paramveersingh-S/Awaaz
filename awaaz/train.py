@@ -29,6 +29,7 @@ from awaaz.metrics import compute_wer_cer
 from awaaz.model import ConformerConfig, ConformerCTC
 from awaaz.text import Tokenizer
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", force=True)
 logger = logging.getLogger("awaaz.train")
 
 
@@ -217,6 +218,7 @@ def train(
     tokenizer_path: Optional[str] = None,
     cmvn_path: Optional[str] = None,
     max_steps: Optional[int] = None,
+    log_every: Optional[int] = None,
 ) -> None:
     """Executes the complete training loop."""
     run_p = Path(run_dir)
@@ -339,15 +341,28 @@ def train(
     # Config-derived planning printout
     param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
     hours_per_lang = train_ds.hours_per_language()
-    logger.info("=" * 65)
-    logger.info("AWAAZ TRAINING PLAN")
-    logger.info("  Model Parameters: %s (%d trainable)", f"{param_count / 1e6:.2f}M", param_count)
+    save_every = int(train_cfg.get("save_every", 500))
+    eval_every = int(train_cfg.get("eval_every", 2000))
+    keep_ckpts = int(train_cfg.get("keep_checkpoints", 12))
+    log_freq = log_every or int(train_cfg.get("log_every", 10))
+
+    plan_lines = [
+        "=" * 65,
+        "AWAAZ TRAINING PLAN",
+        f"  Model Parameters: {param_count / 1e6:.2f}M ({param_count} trainable)",
+    ]
     for lang, hrs in sorted(hours_per_lang.items()):
-        logger.info("  Dataset Hours (%s): %.2f hrs", lang, hrs)
-    logger.info("  Batches per Epoch: %d", len(sampler))
-    logger.info("  Note: Compute total_steps from measured throughput:")
-    logger.info("        total_steps = budget_hours * 3600 * steps_per_sec")
-    logger.info("=" * 65)
+        plan_lines.append(f"  Dataset Hours ({lang}): {hrs:.2f} hrs")
+    plan_lines.extend([
+        f"  Batches per Epoch: {len(sampler)}",
+        f"  Total Steps: {total_steps:,}",
+        f"  Logging Frequency: every {log_freq} steps",
+        f"  Checkpoint Frequency: every {save_every} steps to {run_p / 'last.pt'}",
+        "=" * 65,
+    ])
+    for line in plan_lines:
+        logger.info(line)
+        print(line, flush=True)
 
     # CSV log file
     csv_file = run_p / "train_log.csv"
@@ -358,11 +373,9 @@ def train(
         csv_writer.writerow(["step", "epoch", "loss", "lr", "grad_norm", "steps_per_sec", "audio_sec_per_sec"])
         csv_fp.flush()
 
-    save_every = int(train_cfg.get("save_every", 500))
-    eval_every = int(train_cfg.get("eval_every", 2000))
-    keep_ckpts = int(train_cfg.get("keep_checkpoints", 12))
-
-    logger.info("Starting training loop from step %d to %d...", step, total_steps)
+    start_msg = f"Starting training loop from step {step} to {total_steps}..."
+    logger.info(start_msg)
+    print(start_msg, flush=True)
     model.train()
 
     epoch = start_epoch
@@ -465,11 +478,14 @@ def train(
             csv_writer.writerow([step, epoch, f"{loss_val:.4f}", f"{lr_now:.6e}", f"{norm_val:.3f}", f"{steps_per_sec:.2f}", f"{audio_sec_per_sec:.1f}"])
             csv_fp.flush()
 
-            if step == 1 or step % 50 == 0 or step == total_steps:
-                logger.info(
-                    "Step %d/%d | Epoch %d | Loss: %.4f | LR: %.2e | Grad: %.2f | %.1f aud-s/s",
-                    step, total_steps, epoch, loss_val, lr_now, norm_val, audio_sec_per_sec
+            if step == 1 or step % log_freq == 0 or step == total_steps:
+                progress_pct = (step / total_steps) * 100.0
+                msg = (
+                    f"[{progress_pct:5.1f}%] Step {step}/{total_steps} | Epoch {epoch} | "
+                    f"Loss: {loss_val:.4f} | LR: {lr_now:.2e} | Grad: {norm_val:.2f} | {audio_sec_per_sec:.1f} aud-s/s"
                 )
+                logger.info(msg)
+                print(msg, flush=True)
                 if has_wandb:
                     try:
                         import wandb
@@ -533,6 +549,7 @@ def main():
     parser.add_argument("--tokenizer", type=str, default=None, help="Tokenizer .model path override.")
     parser.add_argument("--cmvn", type=str, default=None, help="CMVN .npz file override.")
     parser.add_argument("--max_steps", type=int, default=None, help="Override total steps (useful for smoke tests).")
+    parser.add_argument("--log_every", type=int, default=10, help="Print progress every N steps (default: 10).")
 
     args = parser.parse_args()
 
@@ -545,6 +562,7 @@ def main():
         tokenizer_path=args.tokenizer,
         cmvn_path=args.cmvn,
         max_steps=args.max_steps,
+        log_every=args.log_every,
     )
 
 
