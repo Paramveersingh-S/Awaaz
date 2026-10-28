@@ -527,6 +527,29 @@ This document records the exact chronological status of Awaaz development across
 
 ---
 
+## Phase 5/7 Diagnostic: Resolving CTC Loss Stagnation (~5.60) & Mode Collapse ("the")
+- **Date**: 2026-10-28
+- **Status**: COMPLETED & VERIFIED
+- **Diagnosis of User Telemetry**:
+  - Training loss remained flat around ~5.60 through step 25,000, and evaluation output collapsed to `HYP: the` (WER 96.5% EN / 100.0% PA).
+  - Mathematical cause: In SentencePiece (vocab 1024), token 2 is `" the"`. A network predicting 98% blanks and the unigram prior token `" the"` produces CTC loss $= -\ln(P(\text{" the"})) \approx 5.60$.
+  - Root causes identified:
+    1. **Dynamic Chunk Masking from Step 0**: 60% of batches were masked into 320ms–640ms chunks with causal convolution. Untrained networks cannot align phonemes in tiny 320ms windows without global context.
+    2. **Premature LR Decay**: Passing `--max_steps 25000` compressed the cosine decay to finish at step 25,000, dropping LR to minimum `1e-5` and preventing the model from escaping the local minimum.
+    3. **GradScaler with bfloat16**: Using `GradScaler` with full-range `bfloat16` applied an artificial $65536\times$ multiplier. Computing `log_softmax` in `bfloat16` inside `CTCHead` degraded gradient precision on small probabilities.
+- **What was built & fixed**:
+  - `awaaz/model.py`: Upcast `CTCHead` logits to `float32` before `log_softmax` for CTCLoss numerical stability. Added Xavier/Kaiming initialization across Conformer layers.
+  - `awaaz/train.py`: Disabled `GradScaler` on `bfloat16` (`enabled=False`). Added `curriculum_steps: 5000` to enforce 100% full-context attention during initial convergence before chunk masking begins. Decoupled `total_steps` (scheduler horizon) from `--max_steps` (loop termination limit).
+  - `configs/small.yaml`: Added `curriculum_steps: 5000` and expanded `chunk_sizes: [8, 16, 32, 64]`.
+- **What was verified**:
+  - Synthetic batch overfit test: 12-block Conformer rapidly dropped loss from 53.99 down to 0.70 in 49 steps.
+  - Entire test suite: **87/87 passed** in 30.02s on CPU.
+  - Changes committed and pushed to `origin/main` (`4157bdb`).
+- **Exact next step**:
+  - Pull `main` in Colab and start fresh training run with curriculum full-context learning.
+
+---
+
 ## Phase Status Summary Table
 
 | Phase | Title | Status | Completion Date |
