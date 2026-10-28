@@ -8,11 +8,64 @@ import argparse
 import json
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
+import numpy as np
 import soundfile as sf
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+
+def extract_waveform_and_sr(audio_data) -> Tuple[Optional[np.ndarray], int]:
+    """Extracts a 1D float32 mono waveform and sample rate from dict or AudioDecoder."""
+    arr = None
+    sr = 16000
+
+    if hasattr(audio_data, "get_all_samples"):
+        # TorchCodec AudioDecoder object (datasets >= 3.x / 4.x)
+        try:
+            samples = audio_data.get_all_samples()
+            arr = samples.data
+            sr = getattr(samples, "sample_rate", 16000)
+        except Exception as e:
+            logging.debug("TorchCodec decoding failed: %s", e)
+    elif isinstance(audio_data, dict):
+        arr = audio_data.get("array")
+        sr = audio_data.get("sampling_rate", 16000)
+    elif hasattr(audio_data, "array"):
+        arr = audio_data.array
+        sr = getattr(audio_data, "sampling_rate", 16000)
+    elif hasattr(audio_data, "__getitem__"):
+        try:
+            arr = audio_data["array"]
+            sr = audio_data.get("sampling_rate", 16000) if hasattr(audio_data, "get") else 16000
+        except (KeyError, TypeError):
+            pass
+
+    if arr is None:
+        return None, sr
+
+    # Convert PyTorch tensor to numpy if applicable
+    if hasattr(arr, "detach"):
+        arr = arr.detach()
+    if hasattr(arr, "cpu"):
+        arr = arr.cpu()
+    if hasattr(arr, "numpy"):
+        arr = arr.numpy()
+
+    arr = np.asarray(arr, dtype=np.float32)
+
+    # Convert multi-channel to mono (channels, samples) or (samples, channels)
+    if arr.ndim > 1:
+        if arr.shape[0] < arr.shape[1]:
+            arr = arr.mean(axis=0)
+        else:
+            arr = arr.mean(axis=1)
+
+    arr = np.squeeze(arr)
+    # Clip float values to [-1.0, 1.0] to prevent FLAC encoding overflows
+    arr = np.clip(arr, -1.0, 1.0)
+    return arr, sr
 
 
 def prepare_hf_dataset(
@@ -22,7 +75,7 @@ def prepare_hf_dataset(
     split: str = "train",
     subset: Optional[str] = None,
     max_items: Optional[int] = None,
-    text_column: str = "sentence",
+    text_column: str = "transcription",
     audio_column: str = "audio",
     source_name: Optional[str] = None,
     domain: str = "general",
@@ -70,9 +123,8 @@ def prepare_hf_dataset(
 
             # Avoid re-encoding if already present
             if not flac_path.exists():
-                arr = audio_data.get("array")
-                sr = audio_data.get("sampling_rate", 16000)
-                if arr is None:
+                arr, sr = extract_waveform_and_sr(audio_data)
+                if arr is None or len(arr) == 0:
                     continue
 
                 # Resample to 16 kHz if necessary
